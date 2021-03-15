@@ -101,6 +101,10 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# IPython
+profile_default/
+ipython_config.py
+
 # Environments
 .env
 .venv
@@ -127,5 +131,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-fluxonium/zhang_schuster_2020/zhang_figures/fig1.c.pdf
-papers/zhang_schuster_2020/zhang_figures/fig1.c.pdf
+.pdf

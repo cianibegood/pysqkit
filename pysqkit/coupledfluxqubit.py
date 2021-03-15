@@ -1,7 +1,7 @@
 """ Module with functions to study a system of two 
 capacitively and inductively coupled flux qubits """
 
-import numpy as np 
+import numpy as np
 from scipy import constants
 from scipy.linalg import sqrtm
 import scipy.linalg as la
