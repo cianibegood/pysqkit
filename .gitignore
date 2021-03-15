@@ -127,3 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+fluxonium/zhang_schuster_2020/zhang_figures/fig1.c.pdf
+papers/zhang_schuster_2020/zhang_figures/fig1.c.pdf
