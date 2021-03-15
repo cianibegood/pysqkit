@@ -38,6 +38,7 @@ class FluxQubitSystem():
         self.ec0 = 1 #ec_ref is taken as unit
         self.ec = ec 
         self.ec_inv = np.linalg.inv(self.ec)
+        #ec_inv_sqrt is needed in case we want to diagonalize the kinetic term
         self.ec_inv_sqrt = sqrtm(self.ec_inv) 
         self.el = el
         self.ej = ej
@@ -120,18 +121,17 @@ class FluxQubitSystem():
         """ It returns the first nlev eigenkets of the single qubit 
         Hamiltonian of qubit k in the Fock basis """
         
-        h = self.hsq(opt, k)
+        h = self.hsq(k)
         ekets = h.eigenstates()[1][0:nlev]
         return ekets 
     
-    def hsq_eigvals(self, opt, k, nlev):
+    def hsq_eigvals(self, k, nlev):
 
         """ It returns the first nlev eigenenergie of the single qubit 
         Hamiltonian of qubit k in the Fock basis as a diagonal 
         quantum object in qutip """
 
-        check_opt(opt, y_opt)
-        h = self.hfq_fock(opt, k, True)
+        h = self.hsq(k)
         evals = h.eigenenergies()[0:nlev]
         y = qutip.Qobj(np.diag(evals))
         return y
