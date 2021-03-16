@@ -63,15 +63,15 @@ class Fluxonium(Qubit):
 
     @property
     def res_freq(self) -> float:
-        return np.sqrt(8*self._ec*self._el)
+        return np.sqrt(0.125*self._ec*self._el)
 
     @property
     def eff_mass(self) -> float:
-        return 1/(8*self._ec)
+        return 0.125*self._ec
 
     @property
     def flux_zpf(self) -> float:
-        return (2*self._ec/self._el)**(1/4)
+        return (2*self._ec/self._el)**0.25
 
     def _get_hamiltonian(self) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
