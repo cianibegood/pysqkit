@@ -41,12 +41,13 @@ class Qubit(ABC):
         return order_vecs(eig_vals)
 
     def _get_eig_states(self) -> Tuple[np.ndarray, np.ndarray]:
+        # FIXME: This function doesn't return the correct eigen states (vs legacy code)
         hamil = self.hamiltonian()
         eig_vals, eig_vecs = linalg.eigh(hamil, eigvals_only=False)
         return order_vecs(eig_vals, eig_vecs)
 
     def eig_energies(self) -> np.ndarray:
-        eig_vals = self._get_eig_states()
+        eig_vals = self._get_eig_vals()
         return eig_vals
 
     def eig_states(self) -> Tuple[np.ndarray, np.ndarray]:
