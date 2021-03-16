@@ -1,60 +1,100 @@
-"""
-Module for the study of the fluxonium qubit
-"""
-
-# %%
+from typing import Union, Optional
 
 import numpy as np
-from qutip import *
-import scipy.linalg
-import scipy.special
-from math import factorial, sqrt
+from scipy.linalg import cosm
+
+from .qubit import Qubit
+from ..bases import fock_basis, FockBasis, OperatorBasis
+
+_supported_bases = (FockBasis, )
 
 
-class Fluxonium():
+class Fluxonium(Qubit):
+    def __init__(
+        self,
+        charge_energy: float,
+        induct_energy: float,
+        joseph_energy: float,
+        ext_flux: float,
+        *,
+        basis: Optional[OperatorBasis] = None,
+        dim_hilbert: Optional[int] = 10
+    ) -> None:
+        self._ec = charge_energy
+        self._el = induct_energy
+        self._ej = joseph_energy
+        self._ext_flux = ext_flux
 
-    """ Class with parameters and methods to study the fluxonium qubit.
-    It uses qutip. """
+        if basis is None:
+            # try-catch block here in case dim_hilbert is wrong
+            basis = fock_basis(dim_hilbert)
+            self._basis = basis
+        else:
+            if not isinstance(basis, OperatorBasis):
+                raise ValueError(
+                    "basis must be an instance of bases.OperatorBasis class")
+            if not isinstance(basis, _supported_bases):
+                raise NotImplementedError("Basis not supported yet")
+            self._basis = basis
 
-    def __init__(self, ec, ej, el, phi_ext):
-        self.ec = ec
-        self.ej = ej
-        self.el = el
-        self.phi_ext = phi_ext  # external phase
-        self.omega0 = np.sqrt(8*el*ec)
-        self.m = 1/(8*ec)  # equivalent "mass"
-        self.r_phi = (2*ec/el)**(1/4)
+    @property
+    def charge_energy(self) -> float:
+        return self._ec
 
-    def hamiltonian(self, n_fock):
-        a = destroy(n_fock)
-        id_f = qeye(n_fock)
-        h = self.omega0*(a.dag()*a + id_f/2)
-        phi_tot = self.r_phi*(a + a.dag()) + self.phi_ext
-        h += -self.ej*phi_tot.cosm()
-        return h
+    @charge_energy.setter
+    def charge_energy(self, new_energy: float) -> None:
+        self._ec = new_energy
 
-    def eigenstates(self, n_fock):
-        h = self.hamiltonian(n_fock)
-        eig_en, eig_vec = h.eigenstates()
-        return eig_en, eig_vec
+    @property
+    def induct_energy(self) -> float:
+        return self._el
 
-    def eigenenergies(self, n_fock):
-        h = self.hamiltonian(n_fock)
-        eig_en = h.eigenenergies()
-        return eig_en
+    @induct_energy.setter
+    def induct_energy(self, new_energy: float) -> None:
+        self._el = new_energy
 
-    def potential(self, phi):
-        v = self.el/2*phi**2 - self.ej*np.cos(phi + self.phi_ext)
-        return v
+    @property
+    def joseph_energy(self) -> float:
+        return self._ej
 
+    @joseph_energy.setter
+    def joseph_energy(self, new_value: float) -> None:
+        self._ej = new_value
 
-def wave_function(mass, omega, hbar, x, psi):
-    """ Gives the wave function in position representation at x given
-    its Fock states representation """
+    @property
+    def res_freq(self) -> float:
+        return np.sqrt(8*self._ec*self._el)
 
-    coef = np.zeros(psi.shape[0], dtype=complex)
-    for n in range(0, len(coef)):
-        coef[n] = 1/(sqrt(2**n*factorial(n))) *\
-            (mass*omega/(np.pi*hbar))**(1/4)*np.exp(-x**2/2)*psi[n]
-    psi_x = np.polynomial.hermite.hermval(x, coef)
-    return psi_x
+    @property
+    def eff_mass(self) -> float:
+        return 1/(8*self._ec)
+
+    @property
+    def flux_zpf(self) -> float:
+        return (2*self._ec/self._el)**(1/4)
+
+    def _get_hamiltonian(self) -> np.ndarray:
+        if isinstance(self.basis, FockBasis):
+            hamil = self.res_freq*(self._basis.raise_op @
+                                   self._basis.low_op + self._basis.id_op/2)
+            total_flux = self._basis.flux_op(self.flux_zpf) + self._ext_flux
+
+            hamil -= self.joseph_energy*cosm(total_flux)
+        else:
+            raise NotImplementedError
+
+        return hamil
+
+    def hamiltonian(self) -> np.ndarray:
+        hamil = self._get_hamiltonian()
+        return hamil
+
+    def potential(
+        self,
+        flux: Union[float, np.ndarray]
+    ) -> Union[float, np.ndarray]:
+        pot = self._el/2*flux**2 - self._ej*np.cos(flux + self._ext_flux)
+        return pot
+
+    def wave_function(self):
+        return None

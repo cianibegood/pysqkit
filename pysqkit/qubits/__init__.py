@@ -1,4 +1,4 @@
-from . import fluxonium, cpb
-from .library import Fluxonium
+from . import legacy_fluxonium, cpb
+from .fluxonium import Fluxonium
 
-__all__ = ['fluxonium', 'cpb', 'Fluxonium']
+__all__ = ['legacy_fluxonium', 'cpb', 'Fluxonium']

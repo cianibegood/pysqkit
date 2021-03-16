@@ -8,17 +8,31 @@ from ..util.linalg import order_vecs
 
 
 class Qubit(ABC):
+    def __init__(self, basis):
+        self._basis = basis
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, new_basis):
+        self._basis = new_basis
+
+    @property
+    def dim_hilbert(self):
+        return self._basis.dim_hilbert
 
     @abstractmethod
-    def hamiltonian(self):
+    def hamiltonian(self) -> np.ndarray:
         pass
 
     @abstractmethod
-    def potential(self):
+    def potential(self) -> np.ndarray:
         pass
 
     @abstractmethod
-    def wave_function(self):
+    def wave_function(self) -> np.ndarray:
         pass
 
     def _get_eig_vals(self) -> np.ndarray:
