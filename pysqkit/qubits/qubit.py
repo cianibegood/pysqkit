@@ -10,15 +10,15 @@ from ..util.linalg import order_vecs
 class Qubit(ABC):
 
     @abstractmethod
-    def set_basis(self):
-        pass
-
-    @abstractmethod
     def hamiltonian(self):
         pass
 
     @abstractmethod
     def potential(self):
+        pass
+
+    @abstractmethod
+    def wave_function(self):
         pass
 
     def _get_eig_vals(self) -> np.ndarray:
