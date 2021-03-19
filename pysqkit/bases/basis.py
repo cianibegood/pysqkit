@@ -16,11 +16,3 @@ class OperatorBasis(ABC):
     @dim_hilbert.setter
     def dim_hilbert(self, new_dim: int) -> None:
         self._dim_hilbert = new_dim
-
-    @abstractmethod
-    def charge_op(self):
-        pass
-
-    @abstractmethod
-    def flux_op(self):
-        pass

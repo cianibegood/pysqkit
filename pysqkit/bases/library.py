@@ -1,9 +1,8 @@
 from typing import Optional
 
 import numpy as np
-
 from .basis import OperatorBasis
-from ..operators import library as lib_op
+from ..operators import low_op, raise_op, num_op, id_op
 
 
 class FockBasis(OperatorBasis):
@@ -19,19 +18,19 @@ class FockBasis(OperatorBasis):
 
     @property
     def low_op(self) -> np.ndarray:
-        return lib_op.low_op(self.dim_hilbert)
+        return low_op(self.dim_hilbert)
 
     @property
     def raise_op(self) -> np.ndarray:
-        return lib_op.raise_op(self.dim_hilbert)
+        return raise_op(self.dim_hilbert)
 
     @property
     def num_op(self) -> np.ndarray:
-        return lib_op.num_op(self.dim_hilbert)
+        return num_op(self.dim_hilbert)
 
     @property
     def id_op(self) -> np.ndarray:
-        return lib_op.id_op(self.dim_hilbert)
+        return id_op(self.dim_hilbert)
 
     def charge_op(self, charge_zpf: Optional[float] = 1.0) -> np.ndarray:
         charge_op = 1j * charge_zpf * (self.raise_op - self.low_op)
@@ -43,6 +42,7 @@ class FockBasis(OperatorBasis):
 
     def __repr__(self):
         label_str = "Fock state basis, hilbert dim={}".format(self.dim_hilbert)
+        return label_str
 
 
 def fock_basis(dim_hilbert: int):

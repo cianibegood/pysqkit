@@ -7,6 +7,7 @@ from scipy.special import factorial
 
 from .qubit import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
+from ..util.linalg import get_mat_elem
 
 _supported_bases = (FockBasis, )
 
@@ -105,12 +106,12 @@ class Fluxonium(Qubit):
     def wave_function(
         self,
         flux: Union[float, np.ndarray],
-        level_ind: Optional[Union[int, np.ndarray]] = 0,
+        state_ind: Optional[Union[int, np.ndarray]] = 0,
         *,
         truncation_ind: int = None
     ) -> np.ndarray:
-        if isinstance(level_ind, int):
-            level_ind = np.array([level_ind])
+        if isinstance(state_ind, int):
+            state_ind = np.array([state_ind])
 
         _, eig_vecs = self.eig_states()
 
@@ -123,24 +124,57 @@ class Fluxonium(Qubit):
                 warnings.warn(
                     "Truncation index exceed the Hilber dimension of the basis")
                 truncation_ind = self.dim_hilbert
-            eig_vecs = eig_vecs[level_ind, :truncation_ind]
+            eig_vecs = eig_vecs[state_ind, :truncation_ind]
             num_inds = truncation_ind
 
         else:
-            eig_vecs = eig_vecs[level_ind]
+            eig_vecs = eig_vecs[state_ind]
             num_inds = self.dim_hilbert
 
         inds = np.arange(num_inds)
         _c = (self.eff_mass*self.res_freq/np.pi)**0.25
 
         coeffs = _c * np.einsum(
-            'i, b, ai -> abi',
+            'i, b, ai -> aib',
             1/np.sqrt(np.power(2.0, inds) * factorial(inds)),
             np.exp(-0.5*flux**2),
-            eig_vecs
+            eig_vecs,
+            optimize=True
         )
 
         wave_funcs = np.squeeze([np.polynomial.hermite.hermval(
-            flux, coeff.T, tensor=False) for coeff in coeffs])
+            flux, coeff, tensor=False) for coeff in coeffs])
 
         return wave_funcs
+
+    def mat_elements(
+        self,
+        operator: Union[str, np.ndarray],
+        in_states: Optional[np.ndarray] = None,
+        out_states: Optional[np.ndarray] = None,
+        *,
+        in_state_inds: Union[int, np.ndarray] = 10,
+        out_state_inds: Union[int, np.ndarray] = 10
+    ) -> Union[float, np.ndarray]:
+
+        if isinstance(operator, str):
+            if hasattr(self.basis, operator):
+                _op = getattr(self.basis, operator)
+                op = _op() if callable(_op) else _op
+            else:
+                raise ValueError(
+                    "Given operator string not supported by the basis {}".format(str(self.basis)))
+        elif isinstance(operator, np.ndarray):
+            op = operator
+        else:
+            raise ValueError("Incorrect operator provided")
+
+        if in_states is None:
+            _, in_states = self.eig_states()
+        else:
+            if not isinstance(in_states, np.ndarray):
+                raise ValueError("Input states format not supported")
+
+        mat_elems = get_mat_elem(op, in_states, out_states)
+
+        return mat_elems

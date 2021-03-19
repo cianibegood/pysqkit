@@ -23,13 +23,30 @@ def order_vecs(
     sorted_inds = np.argsort(val_vector)
     if invert:
         sorted_inds = sorted_inds[::-1]
-    if np.all(sorted_inds == np.arange(val_vector.size)):
-        if pair_vector is not None:
-            return val_vector, pair_vector
-        else:
-            return val_vector
+
+    if pair_vector is not None:
+        return val_vector[sorted_inds], pair_vector[sorted_inds]
     else:
-        if pair_vector is not None:
-            return val_vector[sorted_inds], pair_vector[sorted_inds]
-        else:
-            return val_vector[sorted_inds]
+        return val_vector[sorted_inds]
+
+
+def get_mat_elem(
+    operator: np.ndarray,
+    in_states: np.ndarray,
+    out_states: np.ndarray,
+):
+    in_dim = len(in_states.shape)
+    out_dim = len(out_states.shape)
+
+    if len(operator.shape) != 2:
+        raise ValueError("The operators must a be a 2D array")
+
+    out_inds = list(range(out_dim))
+    in_inds = list(range(out_dim, in_dim + out_dim))
+    op_inds = [out_dim - 1, in_dim + out_dim - 1]
+
+    mat_elem = np.einsum(
+        out_states, out_inds,
+        operator, op_inds,
+        in_states, in_inds)
+    return mat_elem

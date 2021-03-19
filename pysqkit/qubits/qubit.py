@@ -3,6 +3,7 @@ from typing import Tuple
 
 import numpy as np
 from scipy import linalg
+from qutip import Qobj
 
 from ..util.linalg import order_vecs
 
@@ -37,14 +38,17 @@ class Qubit(ABC):
 
     def _get_eig_vals(self) -> np.ndarray:
         hamil = self.hamiltonian()
+        if isinstance(hamil, Qobj):
+            return hamil.eigenenergies()
         eig_vals = linalg.eigh(hamil, eigvals_only=True)
         return order_vecs(eig_vals)
 
     def _get_eig_states(self) -> Tuple[np.ndarray, np.ndarray]:
-        # FIXME: This function doesn't return the correct eigen states (vs legacy code)
         hamil = self.hamiltonian()
+        if isinstance(hamil, Qobj):
+            return hamil.eigenstates()
         eig_vals, eig_vecs = linalg.eigh(hamil, eigvals_only=False)
-        return order_vecs(eig_vals, eig_vecs)
+        return order_vecs(eig_vals, eig_vecs.T)
 
     def eig_energies(self) -> np.ndarray:
         eig_vals = self._get_eig_vals()
