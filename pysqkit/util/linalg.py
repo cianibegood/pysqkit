@@ -8,6 +8,7 @@ def order_vecs(
     pair_vector: np.ndarray = None,
     invert: bool = False
 ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+
     if not isinstance(val_vector, np.ndarray):
         raise ValueError("Input vector must be a np.ndarray object")
     if len(val_vector.shape) > 1:

@@ -2,14 +2,16 @@ from typing import Union, Optional
 import warnings
 
 import numpy as np
-from scipy.linalg import cosm
-from scipy.special import factorial
+from scipy import linalg as la
+from scipy import special as ss
 
 from .qubit import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
 from ..util.linalg import get_mat_elem
 
 _supported_bases = (FockBasis, )
+
+pi = np.pi
 
 
 class Fluxonium(Qubit):
@@ -18,7 +20,7 @@ class Fluxonium(Qubit):
         charge_energy: float,
         induct_energy: float,
         joseph_energy: float,
-        ext_flux: float,
+        flux: float,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 10
@@ -26,7 +28,7 @@ class Fluxonium(Qubit):
         self._ec = charge_energy
         self._el = induct_energy
         self._ej = joseph_energy
-        self._ext_flux = ext_flux
+        self._flux = flux
 
         if basis is None:
             # try-catch block here in case dim_hilbert is wrong
@@ -45,24 +47,32 @@ class Fluxonium(Qubit):
         return self._ec
 
     @charge_energy.setter
-    def charge_energy(self, new_energy: float) -> None:
-        self._ec = new_energy
+    def charge_energy(self, charge_energy: float) -> None:
+        self._ec = charge_energy
 
     @property
     def induct_energy(self) -> float:
         return self._el
 
     @induct_energy.setter
-    def induct_energy(self, new_energy: float) -> None:
-        self._el = new_energy
+    def induct_energy(self, induct_energy: float) -> None:
+        self._el = induct_energy
 
     @property
     def joseph_energy(self) -> float:
         return self._ej
 
     @joseph_energy.setter
-    def joseph_energy(self, new_value: float) -> None:
-        self._ej = new_value
+    def joseph_energy(self, joseph_energy: float) -> None:
+        self._ej = joseph_energy
+
+    @property
+    def flux(self) -> float:
+        return self._flux
+
+    @flux.setter
+    def flux(self, flux: float) -> None:
+        self._flux = flux
 
     @property
     def res_freq(self) -> float:
@@ -70,7 +80,7 @@ class Fluxonium(Qubit):
 
     @property
     def eff_mass(self) -> float:
-        return 0.125*self._ec
+        return 1/(8*self._ec)
 
     @property
     def flux_zpf(self) -> float:
@@ -82,15 +92,19 @@ class Fluxonium(Qubit):
 
     def _get_hamiltonian(self) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            osc_hamil = self.res_freq * \
-                (self._basis.num_op + 0.5*self._basis.id_op)
-            total_flux = self._basis.flux_op(self.flux_zpf) + self._ext_flux
-            cos_term = cosm(total_flux)
-            hamil = osc_hamil - self._ej*cos_term
+            osc_hamil = self.res_freq * self.basis.num_op
+
+            flux_phase = np.exp(1j*2*pi*self.flux)
+            phase_op = self.basis.flux_op(self.flux_zpf)
+
+            exp_mat = flux_phase * la.expm(1j*phase_op)
+            cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
+
+            hamil = osc_hamil - self.joseph_energy*cos_mat
         else:
             raise NotImplementedError
 
-        return hamil
+        return hamil.real
 
     def hamiltonian(self) -> np.ndarray:
         hamil = self._get_hamiltonian()
@@ -100,12 +114,13 @@ class Fluxonium(Qubit):
         self,
         flux: Union[float, np.ndarray]
     ) -> Union[float, np.ndarray]:
-        pot = 0.5*self._el*(flux**2) - self._ej*np.cos(flux + self._ext_flux)
+        pot = 0.5*self._el*flux*flux - self._ej * \
+            np.cos(flux + 2*np.pi*self.flux)
         return pot
 
     def wave_function(
         self,
-        flux: Union[float, np.ndarray],
+        phase: Union[float, np.ndarray],
         state_ind: Optional[Union[int, np.ndarray]] = 0,
         *,
         truncation_ind: int = None
@@ -132,18 +147,20 @@ class Fluxonium(Qubit):
             num_inds = self.dim_hilbert
 
         inds = np.arange(num_inds)
-        _c = (self.eff_mass*self.res_freq/np.pi)**0.25
+        prefactor = (self.eff_mass*self.res_freq/np.pi)**0.25
 
-        coeffs = _c * np.einsum(
+        nat_phase = phase * np.sqrt(self.eff_mass*self.res_freq)
+
+        coeffs = prefactor * np.einsum(
             'i, b, ai -> aib',
-            1/np.sqrt(np.power(2.0, inds) * factorial(inds)),
-            np.exp(-0.5*flux**2),
+            1/np.sqrt(2.0**inds * ss.factorial(inds)),
+            np.exp(-0.5*nat_phase*nat_phase),
             eig_vecs,
             optimize=True
         )
 
         wave_funcs = np.squeeze([np.polynomial.hermite.hermval(
-            flux, coeff, tensor=False) for coeff in coeffs])
+            nat_phase, coeff, tensor=False) for coeff in coeffs])
 
         return wave_funcs
 
