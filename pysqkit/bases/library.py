@@ -13,8 +13,9 @@ class FockBasis(OperatorBasis):
     TODO: __eq__ and __str__ method to be implemented as well.
     """
 
-    def __init__(self, dim_hilbert):
+    def __init__(self, dim_hilbert: int, osc_len: float):
         super().__init__(dim_hilbert)
+        self._len = osc_len
 
     @property
     def low_op(self) -> np.ndarray:
@@ -32,12 +33,15 @@ class FockBasis(OperatorBasis):
     def id_op(self) -> np.ndarray:
         return id_op(self.dim_hilbert)
 
-    def charge_op(self, charge_zpf: Optional[float] = 1.0) -> np.ndarray:
-        charge_op = 1j * charge_zpf * (self.raise_op - self.low_op)
+    @property
+    def charge_op(self) -> np.ndarray:
+        charge_op = 1j * (self.raise_op - self.low_op) / \
+            (self._len * np.sqrt(2))
         return charge_op
 
-    def flux_op(self, flux_zpf: Optional[float] = 1.0) -> np.ndarray:
-        flux_op = flux_zpf * (self.raise_op + self.low_op)
+    @property
+    def flux_op(self) -> np.ndarray:
+        flux_op = self._len * (self.raise_op + self.low_op) / np.sqrt(2)
         return flux_op
 
     def __repr__(self):
@@ -45,7 +49,11 @@ class FockBasis(OperatorBasis):
         return label_str
 
 
-def fock_basis(dim_hilbert: int):
+def fock_basis(dim_hilbert: int, osc_len: float):
     if not isinstance(dim_hilbert, int) or dim_hilbert <= 0:
         raise ValueError("Hilbert dimensionality must be a positive integer")
-    return FockBasis(dim_hilbert)
+
+    if not isinstance(dim_hilbert, int):
+        raise ValueError("The effect oscillator length must be a float value")
+
+    return FockBasis(dim_hilbert, osc_len)

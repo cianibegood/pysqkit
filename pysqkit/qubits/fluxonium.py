@@ -33,7 +33,7 @@ class Fluxonium(Qubit):
 
         if basis is None:
             # try-catch block here in case dim_hilbert is wrong
-            basis = fock_basis(dim_hilbert)
+            basis = fock_basis(dim_hilbert, self.osc_len)
             self._basis = basis
         else:
             if not isinstance(basis, OperatorBasis):
@@ -80,8 +80,12 @@ class Fluxonium(Qubit):
         return np.sqrt(8*self._ec*self._el)
 
     @property
-    def eff_mass(self) -> float:
+    def osc_mass(self) -> float:
         return 1/(8*self._ec)
+
+    @property
+    def osc_len(self) -> float:
+        return (8*self._ec/self._el)**0.25
 
     @property
     def flux_zpf(self) -> float:
@@ -96,9 +100,8 @@ class Fluxonium(Qubit):
             osc_hamil = self.res_freq * self.basis.num_op
 
             flux_phase = np.exp(1j*2*pi*self.flux)
-            phase_op = self.basis.flux_op(self.flux_zpf)
 
-            exp_mat = flux_phase * la.expm(1j*phase_op)
+            exp_mat = flux_phase * la.expm(1j*self.basis.flux_op)
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
 
             hamil = osc_hamil - self.joseph_energy*cos_mat
@@ -147,9 +150,9 @@ class Fluxonium(Qubit):
             eig_vecs = eig_vecs[:, :truncation_ind]
 
         inds = np.arange(truncation_ind or self.dim_hilbert)
-        prefactor = (self.eff_mass*self.res_freq/np.pi)**0.25
+        prefactor = (self.osc_mass*self.res_freq/np.pi)**0.25
 
-        nat_phase = phase * np.sqrt(self.eff_mass*self.res_freq)
+        nat_phase = phase * np.sqrt(self.osc_mass*self.res_freq)
 
         coeffs = prefactor * np.einsum(
             'i, b, ai -> aib',
@@ -181,7 +184,8 @@ class Fluxonium(Qubit):
                 joseph_energy=self.joseph_energy,
                 flux=self.flux,
                 dim_hilbert=self.dim_hilbert,
-                truncation_ind=truncation_ind
+                truncation_ind=truncation_ind,
+                basis=str(self.basis),
             )
         )
 
@@ -192,15 +196,16 @@ class Fluxonium(Qubit):
         operator: Union[str, np.ndarray],
         in_states: Optional[np.ndarray] = None,
         out_states: Optional[np.ndarray] = None,
+        levels: Union[int, np.ndarray] = 10,
         *,
-        in_state_inds: Union[int, np.ndarray] = 10,
-        out_state_inds: Union[int, np.ndarray] = 10
+        get_data=False,
+        **kwargs,
     ) -> Union[float, np.ndarray]:
 
         if isinstance(operator, str):
             if hasattr(self.basis, operator):
                 _op = getattr(self.basis, operator)
-                op = _op() if callable(_op) else _op
+                op = _op(**kwargs) if callable(_op) else _op
             else:
                 raise ValueError(
                     "Given operator string not supported by the basis {}".format(str(self.basis)))
@@ -210,11 +215,36 @@ class Fluxonium(Qubit):
             raise ValueError("Incorrect operator provided")
 
         if in_states is None:
-            _, in_states = self.eig_states()
+            _, in_states = self.eig_states(levels=levels)
         else:
-            if not isinstance(in_states, np.ndarray):
-                raise ValueError("Input states format not supported")
+            raise NotImplementedError
+
+        if out_states is None:
+            _, out_states = self.eig_states(levels=levels)
+        else:
+            raise NotImplementedError
 
         mat_elems = get_mat_elem(op, in_states, out_states)
 
-        return mat_elems
+        if get_data:
+            return mat_elems
+
+        data_arr = xr.DataArray(
+            data=mat_elems,
+            dims=['in_leves', 'out_levels'],
+            coords=dict(
+                in_levels=levels,
+                out_levens=levels,
+            ),
+            attrs=dict(
+                operator=op,
+                charge_energy=self.charge_energy,
+                induct_energy=self.induct_energy,
+                joseph_energy=self.joseph_energy,
+                flux=self.flux,
+                dim_hilbert=self.dim_hilbert,
+                basis=str(self.basis),
+            )
+        )
+
+        return data_arr
