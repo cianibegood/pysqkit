@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 from scipy import linalg as la
 from scipy import special as ss
+import xarray as xr
 
 from .qubit import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
@@ -121,14 +122,18 @@ class Fluxonium(Qubit):
     def wave_function(
         self,
         phase: Union[float, np.ndarray],
-        state_ind: Optional[Union[int, np.ndarray]] = 0,
+        levels: Optional[Union[int, np.ndarray]] = 0,
         *,
-        truncation_ind: int = None
+        truncation_ind: int = None,
+        get_data=False
     ) -> np.ndarray:
-        if isinstance(state_ind, int):
-            state_ind = np.array([state_ind])
+        if isinstance(levels, int):
+            levels = np.array([levels])
 
-        _, eig_vecs = self.eig_states()
+        if isinstance(phase, float):
+            phase = np.array([phase])
+
+        eig_vals, eig_vecs = self.eig_states(levels=levels)
 
         if truncation_ind is not None:
             if not isinstance(truncation_ind, int) or truncation_ind < 0:
@@ -139,14 +144,9 @@ class Fluxonium(Qubit):
                 warnings.warn(
                     "Truncation index exceed the Hilber dimension of the basis")
                 truncation_ind = self.dim_hilbert
-            eig_vecs = eig_vecs[state_ind, :truncation_ind]
-            num_inds = truncation_ind
+            eig_vecs = eig_vecs[:, :truncation_ind]
 
-        else:
-            eig_vecs = eig_vecs[state_ind]
-            num_inds = self.dim_hilbert
-
-        inds = np.arange(num_inds)
+        inds = np.arange(truncation_ind or self.dim_hilbert)
         prefactor = (self.eff_mass*self.res_freq/np.pi)**0.25
 
         nat_phase = phase * np.sqrt(self.eff_mass*self.res_freq)
@@ -159,10 +159,33 @@ class Fluxonium(Qubit):
             optimize=True
         )
 
-        wave_funcs = np.squeeze([np.polynomial.hermite.hermval(
+        wave_funcs = np.array([np.polynomial.hermite.hermval(
             nat_phase, coeff, tensor=False) for coeff in coeffs])
 
-        return wave_funcs
+        if get_data:
+            return wave_funcs
+
+        dataset = xr.Dataset(
+            data_vars=dict(
+                wave_func=(['level', 'phase'], wave_funcs),
+                energy=(['level'], eig_vals),
+                potential=(['phase'], self.potential(phase))
+            ),
+            coords=dict(
+                level=levels,
+                phase=phase,
+            ),
+            attrs=dict(
+                charge_energy=self.charge_energy,
+                induct_energy=self.induct_energy,
+                joseph_energy=self.joseph_energy,
+                flux=self.flux,
+                dim_hilbert=self.dim_hilbert,
+                truncation_ind=truncation_ind
+            )
+        )
+
+        return dataset
 
     def mat_elements(
         self,
