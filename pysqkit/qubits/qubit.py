@@ -3,9 +3,10 @@ from typing import Tuple, Optional, Iterable, Union
 
 import numpy as np
 from scipy import linalg as la
+import xarray as xr
 from qutip import Qobj
 
-from ..util.linalg import order_vecs
+from ..util.linalg import order_vecs, get_mat_elem
 
 
 class Qubit(ABC):
@@ -34,6 +35,10 @@ class Qubit(ABC):
 
     @abstractmethod
     def wave_function(self) -> np.ndarray:
+        pass
+
+    @abstractmethod
+    def _qubit_attrs(self) -> dict:
         pass
 
     def _get_eig_vals(self, subset_inds: Tuple[int]) -> np.ndarray:
@@ -105,3 +110,61 @@ class Qubit(ABC):
         if sel_inds:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
+
+    def mat_elements(
+        self,
+        operator: Union[str, np.ndarray],
+        in_states: Optional[np.ndarray] = None,
+        out_states: Optional[np.ndarray] = None,
+        levels: Union[int, np.ndarray] = 10,
+        *,
+        get_data=False,
+    ) -> np.ndarray:
+        if isinstance(operator, str):
+            if hasattr(self.basis, operator):
+                _op = getattr(self.basis, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
+            else:
+                raise ValueError(
+                    "Given operator string not supported by the basis {}".format(str(self.basis)))
+        elif isinstance(operator, np.ndarray):
+            op = operator
+        else:
+            raise ValueError("Incorrect operator provided")
+
+        if in_states is None:
+            _, in_states = self.eig_states(levels=levels)
+        else:
+            raise NotImplementedError
+
+        if out_states is None:
+            _, out_states = self.eig_states(levels=levels)
+        else:
+            raise NotImplementedError
+
+        mat_elems = get_mat_elem(op, in_states, out_states)
+
+        if get_data:
+            return mat_elems
+
+        data_arr = xr.DataArray(
+            data=mat_elems,
+            dims=['in_leves', 'out_levels'],
+            coords=dict(
+                in_levels=levels,
+                out_levens=levels,
+            ),
+            attrs=dict(
+                operator=op,
+                dim_hilbert=self.dim_hilbert,
+                basis=str(self.basis),
+                **self._qubit_attrs
+            )
+        )
+
+        return data_arr

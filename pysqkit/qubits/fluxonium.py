@@ -8,7 +8,6 @@ import xarray as xr
 
 from .qubit import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
-from ..util.linalg import get_mat_elem
 
 _supported_bases = (FockBasis, )
 
@@ -95,6 +94,16 @@ class Fluxonium(Qubit):
     def charge_zpf(self) -> float:
         return (self._el/(32*self._ec))**0.25
 
+    @property
+    def _qubit_attrs(self) -> dict:
+        q_attrs = dict(
+            charge_energy=self.charge_energy,
+            induct_energy=self.induct_energy,
+            joseph_energy=self.joseph_energy,
+            flux=self.flux,
+        )
+        return q_attrs
+
     def _get_hamiltonian(self) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
             osc_hamil = self.res_freq * self.basis.num_op
@@ -179,72 +188,11 @@ class Fluxonium(Qubit):
                 phase=phase,
             ),
             attrs=dict(
-                charge_energy=self.charge_energy,
-                induct_energy=self.induct_energy,
-                joseph_energy=self.joseph_energy,
-                flux=self.flux,
                 dim_hilbert=self.dim_hilbert,
                 truncation_ind=truncation_ind,
                 basis=str(self.basis),
+                **self._qubit_attrs
             )
         )
 
         return dataset
-
-    def mat_elements(
-        self,
-        operator: Union[str, np.ndarray],
-        in_states: Optional[np.ndarray] = None,
-        out_states: Optional[np.ndarray] = None,
-        levels: Union[int, np.ndarray] = 10,
-        *,
-        get_data=False,
-        **kwargs,
-    ) -> Union[float, np.ndarray]:
-
-        if isinstance(operator, str):
-            if hasattr(self.basis, operator):
-                _op = getattr(self.basis, operator)
-                op = _op(**kwargs) if callable(_op) else _op
-            else:
-                raise ValueError(
-                    "Given operator string not supported by the basis {}".format(str(self.basis)))
-        elif isinstance(operator, np.ndarray):
-            op = operator
-        else:
-            raise ValueError("Incorrect operator provided")
-
-        if in_states is None:
-            _, in_states = self.eig_states(levels=levels)
-        else:
-            raise NotImplementedError
-
-        if out_states is None:
-            _, out_states = self.eig_states(levels=levels)
-        else:
-            raise NotImplementedError
-
-        mat_elems = get_mat_elem(op, in_states, out_states)
-
-        if get_data:
-            return mat_elems
-
-        data_arr = xr.DataArray(
-            data=mat_elems,
-            dims=['in_leves', 'out_levels'],
-            coords=dict(
-                in_levels=levels,
-                out_levens=levels,
-            ),
-            attrs=dict(
-                operator=op,
-                charge_energy=self.charge_energy,
-                induct_energy=self.induct_energy,
-                joseph_energy=self.joseph_energy,
-                flux=self.flux,
-                dim_hilbert=self.dim_hilbert,
-                basis=str(self.basis),
-            )
-        )
-
-        return data_arr
