@@ -1,5 +1,7 @@
 
-from typing import Union, Tuple
+from typing import Union, Tuple, Iterable
+from functools import reduce
+
 import numpy as np
 
 
@@ -51,3 +53,7 @@ def get_mat_elem(
         operator, op_inds,
         in_states, in_inds)
     return mat_elem
+
+
+def tensor_prod(operators: Iterable):
+    return reduce(np.kron, operators)

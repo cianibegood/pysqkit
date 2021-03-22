@@ -1,8 +1,6 @@
-from typing import Optional
-
 import numpy as np
 from .basis import OperatorBasis
-from ..operators import low_op, raise_op, num_op, id_op
+from ..operators import low_op, raise_op, num_op
 
 
 class FockBasis(OperatorBasis):
@@ -28,10 +26,6 @@ class FockBasis(OperatorBasis):
     @property
     def num_op(self) -> np.ndarray:
         return num_op(self.dim_hilbert)
-
-    @property
-    def id_op(self) -> np.ndarray:
-        return id_op(self.dim_hilbert)
 
     @property
     def charge_op(self) -> np.ndarray:

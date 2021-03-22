@@ -1,4 +1,8 @@
-from abc import ABC, abstractmethod
+from abc import ABC
+
+import numpy as np
+
+from ..operators import id_op
 
 
 class OperatorBasis(ABC):
@@ -16,3 +20,7 @@ class OperatorBasis(ABC):
     @dim_hilbert.setter
     def dim_hilbert(self, new_dim: int) -> None:
         self._dim_hilbert = new_dim
+
+    @property
+    def id_op(self) -> np.ndarray:
+        return id_op(self.dim_hilbert)

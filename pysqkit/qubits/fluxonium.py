@@ -106,7 +106,8 @@ class Fluxonium(Qubit):
 
     def _get_hamiltonian(self) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            osc_hamil = self.res_freq * self.basis.num_op
+            osc_hamil = self.res_freq * \
+                (self.basis.num_op + 0.5*self.basis.id_op)
 
             flux_phase = np.exp(1j*2*pi*self.flux)
 

@@ -168,3 +168,12 @@ class Qubit(ABC):
         )
 
         return data_arr
+
+        def diag_hamiltonian(
+                self,
+                levels: Optional[Union[int, Iterable[int]]] = None
+        ) -> np.ndarray:
+            eig_energies = self.eig_energies(levels=levels)
+
+            hamil = np.diag(eig_energies)
+            return hamil
