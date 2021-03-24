@@ -6,12 +6,33 @@ from scipy import linalg as la
 import xarray as xr
 from qutip import Qobj
 
+from ..bases import OperatorBasis
 from ..util.linalg import order_vecs, get_mat_elem
 
 
 class Qubit(ABC):
-    def __init__(self, basis):
+    def __init__(self, basis: OperatorBasis, *, label: str = None):
+        if not isinstance(basis, OperatorBasis):
+            raise ValueError(
+                "basis must be an instance of bases.OperatorBasis class")
+
         self._basis = basis
+
+        if label is None:
+            self._label = 'Qubit'
+        else:
+            if not isinstance(label, str):
+                raise ValueError(
+                    "The qubit label must be a string type variable")
+            self._label = label
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    @label.setter
+    def label(self, new_label) -> None:
+        self._label = new_label
 
     @property
     def basis(self):
@@ -65,7 +86,7 @@ class Qubit(ABC):
 
     def eig_energies(
         self,
-        levels: Optional[Union[int, Iterable[int]]] = None
+        levels: Optional[Union[int, Iterable[int]]] = 10
     ) -> np.ndarray:
         if levels is not None:
             if isinstance(levels, int):
@@ -89,7 +110,7 @@ class Qubit(ABC):
 
     def eig_states(
             self,
-            levels: Optional[Union[int, Iterable[int]]] = None
+            levels: Optional[Union[int, Iterable[int]]] = 10
     ) -> Tuple[np.ndarray, np.ndarray]:
         if levels is not None:
             if isinstance(levels, int):
@@ -168,12 +189,3 @@ class Qubit(ABC):
         )
 
         return data_arr
-
-        def diag_hamiltonian(
-                self,
-                levels: Optional[Union[int, Iterable[int]]] = None
-        ) -> np.ndarray:
-            eig_energies = self.eig_energies(levels=levels)
-
-            hamil = np.diag(eig_energies)
-            return hamil

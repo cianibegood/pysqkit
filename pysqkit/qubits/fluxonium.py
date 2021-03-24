@@ -22,6 +22,7 @@ class Fluxonium(Qubit):
         joseph_energy: float,
         flux: float,
         *,
+        label: str = None,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 10
     ) -> None:
@@ -33,14 +34,13 @@ class Fluxonium(Qubit):
         if basis is None:
             # try-catch block here in case dim_hilbert is wrong
             basis = fock_basis(dim_hilbert, self.osc_len)
-            self._basis = basis
+
         else:
-            if not isinstance(basis, OperatorBasis):
-                raise ValueError(
-                    "basis must be an instance of bases.OperatorBasis class")
             if not isinstance(basis, _supported_bases):
                 raise NotImplementedError("Basis not supported yet")
-            self._basis = basis
+
+        label = label or 'Fluxonium'
+        super().__init__(basis, label=label)
 
     @property
     def charge_energy(self) -> float:

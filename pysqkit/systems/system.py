@@ -1,8 +1,11 @@
-import numpy as np
+from typing import Optional, List, Dict
 
+import numpy as np
 
 from ..util.linalg import tensor_prod
 from ..qubits import Qubit
+
+from ..operators import id_op
 
 
 class System:
@@ -42,30 +45,63 @@ class System:
     def hamiltonian(
             self,
             *,
-            bare=False) -> np.ndarray:
-        subsys_hamiltonians = []
+            bare=False,
+            truncated_levels: Optional[Dict[str, int]] = None
+    ) -> np.ndarray:
+        if truncated_levels:
+            if not isinstance(truncated_levels, dict):
+                raise ValueError(
+                    "The truncated levels must be provided as a dictionary")
 
-        for qi, qubit in enumerate(self.qubits):
-            q_hamil = qubit.diag_hamiltonian()
-            subsys_hamil = tensor_prod(q_hamil if i == qi else q.basis.id_op
-                                       for i, q in enumerate(self.qubits))
+        subsys_dims = {}
+        if truncated_levels:
+            for qubit in self.qubits:
+                q_label = qubit.label
+                if q_label in truncated_levels:
+                    subsys_dims[q_label] = truncated_levels[q_label]
+                else:
+                    subsys_dims[q_label] = 6
+        else:
+            for qubit in self.qubits:
+                subsys_dims[qubit.label] = 6
 
-            subsys_hamiltonians.append(subsys_hamil)
+        sys_dim = np.prod(list(subsys_dims.values()))
 
-        bare_hamiltonian = np.sum(subsys_hamiltonians, axis=0)
+        bare_hamiltonian = np.zeros((sys_dim, sys_dim), dtype=complex)
+
+        for subsys_ind, subsys_qubit in enumerate(self.qubits):
+            eig_energies = subsys_qubit.eig_energies(
+                levels=subsys_dims[subsys_qubit.label])
+            q_hamil = np.diag(eig_energies)
+
+            subsys_ops = [q_hamil if q.label == subsys_qubit.label else id_op(
+                subsys_dims[q.label]) for q in self.qubits]
+            subsys_hamil = tensor_prod(subsys_ops)
+
+            bare_hamiltonian += subsys_hamil
 
         if bare:
             return bare_hamiltonian
 
-        int_hamiltonians = []
+        int_hamiltonian = np.zeros((sys_dim, sys_dim), dtype=complex)
 
         for coup in self._couplings:
-            coup_hamil = coup.diag_hamiltonian()  # to be implemented still
-            subsys_hamil = tensor_prod(coup_hamil if i == qi else q.basis.id_op
-                                       for i, q in enumerate(self.qubits))
+            for prefactor, term_ops in coup.hamiltonian_terms(tensor_ops=False):
+                coupled_qubits = list(term_ops.keys())
 
-            int_hamiltonians.append(subsys_hamil)
+                diag_ops = []
+                for qubit in self.qubits:
+                    if qubit.label in coupled_qubits:
+                        q_op = qubit.mat_elements(
+                            term_ops[qubit.label],
+                            levels=subsys_dims[qubit.label]
+                        )
+                        diag_ops.append(q_op)
+                    else:
+                        diag_ops.append(id_op(subsys_dims[qubit.label]))
 
-        int_hamiltonian = np.sum(int_hamiltonians)
+                op = tensor_prod(diag_ops)
+
+                int_hamiltonian += prefactor * op
 
         return bare_hamiltonian + int_hamiltonian
