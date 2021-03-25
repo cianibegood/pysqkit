@@ -11,20 +11,17 @@ from ..util.linalg import order_vecs, get_mat_elem
 
 
 class Qubit(ABC):
-    def __init__(self, basis: OperatorBasis, *, label: str = None):
+    def __init__(self,  label: str, basis: OperatorBasis):
         if not isinstance(basis, OperatorBasis):
             raise ValueError(
                 "basis must be an instance of bases.OperatorBasis class")
 
         self._basis = basis
 
-        if label is None:
-            self._label = 'Qubit'
-        else:
-            if not isinstance(label, str):
-                raise ValueError(
-                    "The qubit label must be a string type variable")
-            self._label = label
+        if not isinstance(label, str):
+            raise ValueError(
+                "The qubit label must be a string type variable")
+        self._label = label
 
     @property
     def label(self) -> str:

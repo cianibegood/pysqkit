@@ -17,12 +17,12 @@ pi = np.pi
 class Fluxonium(Qubit):
     def __init__(
         self,
+        label: str,
         charge_energy: float,
         induct_energy: float,
         joseph_energy: float,
         flux: float,
         *,
-        label: str = None,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 10
     ) -> None:
@@ -39,8 +39,7 @@ class Fluxonium(Qubit):
             if not isinstance(basis, _supported_bases):
                 raise NotImplementedError("Basis not supported yet")
 
-        label = label or 'Fluxonium'
-        super().__init__(basis, label=label)
+        super().__init__(label=label, basis=basis)
 
     @property
     def charge_energy(self) -> float:
