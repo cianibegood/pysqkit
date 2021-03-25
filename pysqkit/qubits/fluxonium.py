@@ -6,7 +6,7 @@ from scipy import linalg as la
 from scipy import special as ss
 import xarray as xr
 
-from .qubit import Qubit
+from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
 
 _supported_bases = (FockBasis, )
@@ -24,7 +24,7 @@ class Fluxonium(Qubit):
         flux: float,
         *,
         basis: Optional[OperatorBasis] = None,
-        dim_hilbert: Optional[int] = 10
+        dim_hilbert: Optional[int] = 100
     ) -> None:
         self._ec = charge_energy
         self._el = induct_energy

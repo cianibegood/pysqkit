@@ -1,16 +1,15 @@
-from typing import Union
+from typing import Union, Iterable
 
-from ..qubits import Qubit
-from .coupler import CouplingTerm
+from ..systems import Qubit, Coupling
 
 
 def capacitive_coupling(
+        qubits: Iterable[Qubit],
         strength: Union[float, complex],
-        qubit_0: Qubit,
-        qubit_1: Qubit
-) -> CouplingTerm:
-
-    q_labels = [qubit_0.label, qubit_1.label]
+) -> Coupling:
+    if len(qubits) != 2 or any(not isinstance(q, Qubit) for q in qubits):
+        raise ValueError("Only pair of qubits can be coupled")
+    q_labels = [q.label for q in qubits]
 
     if None in q_labels:
         raise ValueError("Qubits must be labeled")
@@ -18,9 +17,9 @@ def capacitive_coupling(
     if q_labels[0] == q_labels[1]:
         raise ValueError("Qubits must have distinct labels")
 
-    operators = {q.label: q.basis.charge_op for q in (qubit_0, qubit_1)}
+    operators = {q.label: q.basis.charge_op for q in qubits}
 
-    coupling = CouplingTerm(
+    coupling = Coupling(
         prefactors=strength,
         operators=operators,
         qubits=q_labels

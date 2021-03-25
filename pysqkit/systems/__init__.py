@@ -1,4 +1,3 @@
-from . import coupledfluxqubit
-from .system import System
+from .system import Qubit, Coupling, QubitSystem
 
-__all__ = ['coupledfluxqubit', 'System']
+__all__ = ['Qubit', 'Coupling', 'QubitSystem']

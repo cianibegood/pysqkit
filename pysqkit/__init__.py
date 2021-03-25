@@ -1,11 +1,17 @@
-from .qubits import legacy_fluxonium, fluxonium, cpb
-from .systems import coupledfluxqubit
+
+from .systems import QubitSystem, Coupling
+from . import qubits
+from . import couplers
+from . import operators
+from . import bases
 from . import util
 
 __all__ = [
-    'legacy_fluxonium',
-    'fluxonium',
-    'cpb',
-    'coupledfluxqubit',
-    'util'
+    'qubits',
+    'couplers',
+    'operators',
+    'bases',
+    'QubitSystem',
+    'Coupling',
+    'util',
 ]
