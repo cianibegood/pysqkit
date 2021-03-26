@@ -30,6 +30,7 @@ class Fluxonium(Qubit):
         self._el = induct_energy
         self._ej = joseph_energy
         self._flux = flux
+        self._scq_compatible = False  # Used for debugging and comparison
 
         if basis is None:
             # try-catch block here in case dim_hilbert is wrong
@@ -103,10 +104,15 @@ class Fluxonium(Qubit):
         )
         return q_attrs
 
-    def _get_hamiltonian(self) -> np.ndarray:
+    def _get_hamiltonian(
+        self,
+    ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            osc_hamil = self.res_freq * \
-                (self.basis.num_op + 0.5*self.basis.id_op)
+            if self._scq_compatible:
+                osc_hamil = self.res_freq * self.basis.num_op
+            else:
+                osc_hamil = self.res_freq * \
+                    (self.basis.num_op + 0.5*self.basis.id_op)
 
             flux_phase = np.exp(1j*2*pi*self.flux)
 
@@ -119,7 +125,9 @@ class Fluxonium(Qubit):
 
         return hamil.real
 
-    def hamiltonian(self) -> np.ndarray:
+    def hamiltonian(
+        self,
+    ) -> np.ndarray:
         hamil = self._get_hamiltonian()
         return hamil
 
