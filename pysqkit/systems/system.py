@@ -144,9 +144,17 @@ class Qubit(ABC):
                 if len(op.shape) != 2:
                     raise ValueError("The operator must be a 2D array")
 
+            elif hasattr(self, operator):
+                _op = getattr(self, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
             else:
                 raise ValueError(
-                    "Given operator string not supported by the basis {}".format(str(self.basis)))
+                    "Given operator string not supported by the qubit or its basis {}".format(str(self.basis)))
         elif isinstance(operator, np.ndarray):
             op = operator
         else:

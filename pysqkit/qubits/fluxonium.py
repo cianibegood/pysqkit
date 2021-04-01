@@ -1,4 +1,4 @@
-#%%
+# %%
 from typing import Union, Optional
 import warnings
 
@@ -7,11 +7,11 @@ from scipy import linalg as la
 from scipy import special as ss
 import xarray as xr
 
-#%%
+# %%
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
 
-#%%
+# %%
 
 _supported_bases = (FockBasis, )
 
@@ -38,7 +38,7 @@ class Fluxonium(Qubit):
 
         if basis is None:
             # try-catch block here in case dim_hilbert is wrong
-            basis = fock_basis(dim_hilbert, self.osc_len)
+            basis = fock_basis(dim_hilbert)
 
         else:
             if not isinstance(basis, _supported_bases):
@@ -98,6 +98,15 @@ class Fluxonium(Qubit):
     def charge_zpf(self) -> float:
         return (self._el/(32*self._ec))**0.25
 
+    def charge_op(self) -> np.ndarray:
+        charge_op = 1j * self.charge_zpf * \
+            (self.basis.raise_op - self.basis.low_op)
+        return charge_op
+
+    def flux_op(self) -> np.ndarray:
+        flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
+        return flux_op
+
     @property
     def _qubit_attrs(self) -> dict:
         q_attrs = dict(
@@ -120,7 +129,7 @@ class Fluxonium(Qubit):
 
             flux_phase = np.exp(1j*2*pi*self.flux)
 
-            exp_mat = flux_phase * la.expm(1j*self.basis.flux_op)
+            exp_mat = flux_phase * la.expm(1j*self.flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
 
             hamil = osc_hamil - self.joseph_energy*cos_mat
