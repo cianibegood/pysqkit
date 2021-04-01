@@ -57,3 +57,17 @@ def get_mat_elem(
 
 def tensor_prod(operators: Iterable):
     return reduce(np.kron, operators)
+
+
+def transform_basis(operator, basis_tranformation):
+    if len(operator.shape) != 2:
+        raise ValueError("The operators must a be a 2D array")
+
+    transformed_op = np.einsum(
+        'ai, ij, bj -> ab',
+        basis_tranformation,
+        operator,
+        basis_tranformation,
+        optimize=True,
+    )
+    return transformed_op

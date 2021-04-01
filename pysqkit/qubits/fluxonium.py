@@ -11,6 +11,7 @@ from qutip import Qobj
 # %%
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
+from ..util.linalg import transform_basis
 
 # %%
 
@@ -99,13 +100,21 @@ class Fluxonium(Qubit):
     def charge_zpf(self) -> float:
         return (self._el/(32*self._ec))**0.25
 
+    def _get_charge_op(self):
+        charge_op = 1j * self.charge_zpf * \
+            (self.basis.raise_op - self.basis.low_op)
+
+        if self.basis.transformation:
+            return transform_basis(charge_op, self.basis.transformation)
+        return charge_op
+
     def charge_op(
         self,
         *,
         as_qobj=False,
     ) -> np.ndarray:
-        charge_op = 1j * self.charge_zpf * \
-            (self.basis.raise_op - self.basis.low_op)
+        charge_op = self._get_charge_op()
+
         if as_qobj:
             dim = self.dim_hilbert
             qobj_op = Qobj(
@@ -118,8 +127,16 @@ class Fluxonium(Qubit):
             return qobj_op
         return charge_op
 
-    def flux_op(self, *, as_qobj=False) -> np.ndarray:
+    def _get_flux_op(self):
         flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
+
+        if self.basis.transformation:
+            return transform_basis(flux_op, self.basis.transformation)
+        return flux_op
+
+    def flux_op(self, *, as_qobj=False) -> np.ndarray:
+        flux_op = self._get_flux_op()
+
         if as_qobj:
             dim = self.dim_hilbert
             qobj_op = Qobj(
@@ -154,13 +171,15 @@ class Fluxonium(Qubit):
 
             flux_phase = np.exp(1j*2*pi*self.flux)
 
-            exp_mat = flux_phase * la.expm(1j*self.flux_op())
+            exp_mat = flux_phase * la.expm(1j*self._get_flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
 
             hamil = osc_hamil - self.joseph_energy*cos_mat
         else:
             raise NotImplementedError
 
+        if self.basis.transformation:
+            return transform_basis(hamil.real, self.basis.transformation)
         return hamil.real
 
     def hamiltonian(
