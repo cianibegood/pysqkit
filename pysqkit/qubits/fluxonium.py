@@ -1,3 +1,4 @@
+#%%
 from typing import Union, Optional
 import warnings
 
@@ -6,8 +7,11 @@ from scipy import linalg as la
 from scipy import special as ss
 import xarray as xr
 
+#%%
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
+
+#%%
 
 _supported_bases = (FockBasis, )
 

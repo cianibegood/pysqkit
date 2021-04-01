@@ -5,7 +5,9 @@ from ..operators import low_op, raise_op, num_op
 
 class FockBasis(OperatorBasis):
     """
-    A general Fock basis object, which encodes the Hamiltonian dimensionality (cutoff) as well as the operators necessary (creation operators) and charge/flux operators expressed in this basis.
+    A general Fock basis object, which encodes the Hamiltonian dimensionality 
+    (cutoff) as well as the operators necessary (creation operators) and charge/flux 
+    operators expressed in this basis.
 
     TODO: Perhaps one can include commonly used operators, like cos(flux_op) in here.
     TODO: __eq__ and __str__ method to be implemented as well.
