@@ -6,6 +6,7 @@ import numpy as np
 from scipy import linalg as la
 from scipy import special as ss
 import xarray as xr
+from qutip import Qobj
 
 # %%
 from ..systems import Qubit
@@ -98,13 +99,37 @@ class Fluxonium(Qubit):
     def charge_zpf(self) -> float:
         return (self._el/(32*self._ec))**0.25
 
-    def charge_op(self) -> np.ndarray:
+    def charge_op(
+        self,
+        *,
+        as_qobj=False,
+    ) -> np.ndarray:
         charge_op = 1j * self.charge_zpf * \
             (self.basis.raise_op - self.basis.low_op)
+        if as_qobj:
+            dim = self.dim_hilbert
+            qobj_op = Qobj(
+                inpt=charge_op,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type='oper',
+                isherm=True
+            )
+            return qobj_op
         return charge_op
 
-    def flux_op(self) -> np.ndarray:
+    def flux_op(self, *, as_qobj=False) -> np.ndarray:
         flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
+        if as_qobj:
+            dim = self.dim_hilbert
+            qobj_op = Qobj(
+                inpt=flux_op,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type='oper',
+                isherm=True
+            )
+            return qobj_op
         return flux_op
 
     @property
@@ -140,8 +165,20 @@ class Fluxonium(Qubit):
 
     def hamiltonian(
         self,
+        *,
+        as_qobj=False
     ) -> np.ndarray:
         hamil = self._get_hamiltonian()
+        if as_qobj:
+            dim = self.dim_hilbert
+            qobj_op = Qobj(
+                inpt=hamil,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type='oper',
+                isherm=True
+            )
+            return qobj_op
         return hamil
 
     def potential(
