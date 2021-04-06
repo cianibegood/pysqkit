@@ -17,7 +17,7 @@ def capacitive_coupling(
     if q_labels[0] == q_labels[1]:
         raise ValueError("Qubits must have distinct labels")
 
-    operators = {q.label: q.basis.charge_op for q in qubits}
+    operators = {q.label: q.charge_op() for q in qubits}
 
     coupling = Coupling(
         prefactors=strength,
