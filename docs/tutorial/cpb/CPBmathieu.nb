@@ -1,0 +1,89 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.3' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[      2438,         80]
+NotebookOptionsPosition[      1961,         61]
+NotebookOutlinePosition[      2503,         81]
+CellTagsIndexPosition[      2460,         78]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"ng", "=", "0.3"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ec", "=", "1"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ej", "=", "50"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"kf", "[", 
+    RowBox[{"m_", ",", " ", "ng_"}], "]"}], "=", 
+   RowBox[{"m", "+", "1", " ", "-", " ", 
+    RowBox[{"Mod", "[", 
+     RowBox[{
+      RowBox[{"m", "+", "1"}], ",", " ", "2"}], "]"}], "+", 
+    RowBox[{"2", "ng", 
+     RowBox[{
+      RowBox[{"(", 
+       RowBox[{"-", "1"}], ")"}], "^", "m"}]}]}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"Ecpb", "[", 
+    RowBox[{"m_", ",", " ", "ng_"}], "]"}], "=", " ", 
+   RowBox[{"ec", " ", 
+    RowBox[{"MathieuCharacteristicA", "[", 
+     RowBox[{
+      RowBox[{"kf", "[", 
+       RowBox[{"m", ",", " ", "ng"}], "]"}], ",", " ", 
+      RowBox[{
+       RowBox[{"-", "ej"}], "/", 
+       RowBox[{"(", 
+        RowBox[{"2", "ec"}], ")"}]}]}], "]"}]}]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.8095213156527433`*^9, 3.8095213948969297`*^9}, {
+  3.8095216593511887`*^9, 3.809521659811737*^9}, {3.809521724672104*^9, 
+  3.8095217250456123`*^9}, {3.809521760703404*^9, 3.809521760993084*^9}, {
+  3.809521796758782*^9, 3.809521812347402*^9}}],
+
+Cell[BoxData[
+ RowBox[{"ClearAll", "[", "\"\<Global`*\>\"", "]"}]], "Input",
+ CellChangeTimes->{{3.809521933534876*^9, 3.809521941839816*^9}}]
+},
+WindowSize->{808, 911},
+WindowMargins->{{Automatic, 493}, {-10, Automatic}},
+PrintingCopies->1,
+PrintingPageRange->{Automatic, Automatic},
+PrintingOptions->{"PaperOrientation"->"Portrait",
+"PaperSize"->{Automatic, Automatic},
+"PostScriptOutputFile"->"/home/ciani/mathieuCPB.pdf"},
+FrontEndVersion->"10.3 for Linux x86 (64-bit) (October 9, 2015)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 1254, 35, 121, "Input"],
+Cell[1815, 57, 142, 2, 65, "Input"]
+}
+]
+*)
+
+(* End of internal cache information *)

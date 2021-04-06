@@ -1,0 +1,11 @@
+The data where generated using the simulated 
+ec = 0.479 GHz 
+ej = 3.395 GHz 
+el = 0.132 GHz 
+phi_bias = 2.9845130209103035 GHz 
+n_fock = 1000 GHz 
+n_fock_wave = 150 GHz 
+We obtain the following transition frequencies: 
+delta_eg = 0.12428795212935521 GHz 
+delta_fe = 2.883531793835353 GHz 
+delta_hf = 0.277456175049376 GHz 
