@@ -19,7 +19,7 @@ matplotlib.rcParams['mathtext.fontset'] = 'cm'
 
 #%%
 
-""" Parameters from from Schuster et al """
+""" Parameters from Schuster et al """
 
 ec_ref = 0.479 #GHz
 ec = 1    # unit fixed to 1
