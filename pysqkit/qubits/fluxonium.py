@@ -306,9 +306,9 @@ class Fluxonium(Qubit):
         if k > m:
             k, m = m, k
         
-        jump_down = np.zeros([lev, lev], dtype=float)
-        jump_down[k, m] = 1
-        jump_up = jump_down.transpose()
+        down_op = np.zeros([lev, lev], dtype=float)
+        down_op[k, m] = 1
+        up_op = down_op.transpose()
 
         eig_en, eig_vec = self.eig_states([k, m])
         energy_diff = (eig_en[1] - eig_en[0])/self._ec
@@ -318,7 +318,10 @@ class Fluxonium(Qubit):
         gamma = self._ec*1/(4*qdiel)*energy_diff**2*np.abs(phi_km)**2
         nth = average_photon(energy_diff*self._ec, beta)
 
-        return (gamma*(nth + 1)*jump_down, gamma*nth*jump_up)
+        jump_down = np.sqrt(gamma*(nth + 1))*down_op
+        jump_up = np.sqrt(gamma*(nth + 1))*up_op
+
+        return (jump_down, jump_up)
     
     def dielectric_jump(
         self,
@@ -348,6 +351,7 @@ class Fluxonium(Qubit):
             )
             return (jump_down_qobj, jump_up_qobj)
         return (jump_down, jump_up)
+    
     
 
 
