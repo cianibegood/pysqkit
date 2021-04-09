@@ -22,13 +22,13 @@ flux = 1/2
 flx = fluxonium.Fluxonium('F1', ec, el, ej, flux, dim_hilbert=50)
 
 qdiel = 1000
-beta = 20
+beta = 100
 
 # %%
 k = 0
-m = 1
+m = 3
 flx.dielectric_jump(k, m, qdiel, beta)
-jump_down, jump_up = flx.dielectric_jump(k, m, qdiel, beta, as_qobj=True)
-
+jump_down, jump_up = flx.dielectric_jump(k, m, qdiel, beta, as_qobj=False)
+jump_diel = flx.dielectric_loss(qdiel, beta, as_qobj=True)
 
 # %%

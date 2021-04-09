@@ -282,7 +282,7 @@ class Fluxonium(Qubit):
         qdiel: float, 
         beta: float, 
         lev: int = 5
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray]:
         if qdiel < 0 or beta < 0:
             raise ValueError("Quality factor qdiel and (absolute)" + \
                 "inverse temperature beta must be positive.")
@@ -319,7 +319,7 @@ class Fluxonium(Qubit):
         nth = average_photon(energy_diff*self._ec, beta)
 
         jump_down = np.sqrt(gamma*(nth + 1))*down_op
-        jump_up = np.sqrt(gamma*(nth + 1))*up_op
+        jump_up = np.sqrt(gamma*nth)*up_op
 
         return (jump_down, jump_up)
     
@@ -331,7 +331,7 @@ class Fluxonium(Qubit):
         beta: float, 
         lev: int = 5,
         as_qobj=False
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray]:
         jump_down, jump_up = self._get_dielectric_jump(k, m, qdiel, beta, lev)
         if as_qobj:
             dim = lev
@@ -349,8 +349,23 @@ class Fluxonium(Qubit):
                 type='oper',
                 isherm=True
             )
-            return (jump_down_qobj, jump_up_qobj)
-        return (jump_down, jump_up)
+            return jump_down_qobj, jump_up_qobj
+        return jump_down, jump_up
+    
+    def dielectric_loss(
+        self,
+        qdiel: float,
+        beta: float,
+        lev: int = 5,
+        as_qobj=False
+    ) -> Tuple[np.ndarray]:
+        jump_list = []
+        for k in range(0, lev):
+            for m in range(k+1, lev):
+                jump_list.extend(self.dielectric_jump(k, m, qdiel, 
+                    beta, lev, as_qobj))
+        return jump_list
+
     
     
 
