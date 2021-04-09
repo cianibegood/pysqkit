@@ -236,7 +236,7 @@ class Coupling:
         if isinstance(operators, dict):
             self._ops = [operators]
         elif isinstance(operators, Iterable):
-            self._ops = operators
+            self._ops = list(operators)
 
         for op in self._ops:
             for key, val in op.items():
@@ -263,7 +263,7 @@ class Coupling:
 
         self._hilbert_dims = {}
         for op in self._ops:
-            for qubit, qubit_op in operators.items():
+            for qubit, qubit_op in op.items():
                 if len(qubit_op.shape) != 2 or qubit_op.shape[0] != qubit_op.shape[1]:
                     raise ValueError("Each operator must be a square matrix")
 

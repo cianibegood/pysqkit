@@ -103,9 +103,6 @@ class Fluxonium(Qubit):
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * \
             (self.basis.raise_op - self.basis.low_op)
-
-        if self.basis.transformation:
-            return transform_basis(charge_op, self.basis.transformation)
         return charge_op
 
     def charge_op(
@@ -115,8 +112,11 @@ class Fluxonium(Qubit):
     ) -> np.ndarray:
         charge_op = self._get_charge_op()
 
+        if self.basis.transformation is not None:
+            charge_op = transform_basis(charge_op, self.basis.transformation)
+
         if as_qobj:
-            dim = self.dim_hilbert
+            dim = charge_op.shape[0]
             qobj_op = Qobj(
                 inpt=charge_op,
                 dims=[[dim], [dim]],
@@ -129,16 +129,16 @@ class Fluxonium(Qubit):
 
     def _get_flux_op(self):
         flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
-
-        if self.basis.transformation:
-            return transform_basis(flux_op, self.basis.transformation)
         return flux_op
 
     def flux_op(self, *, as_qobj=False) -> np.ndarray:
         flux_op = self._get_flux_op()
 
+        if self.basis.transformation is not None:
+            flux_op = transform_basis(flux_op, self.basis.transformation)
+
         if as_qobj:
-            dim = self.dim_hilbert
+            dim = flux_op.shape[0]
             qobj_op = Qobj(
                 inpt=flux_op,
                 dims=[[dim], [dim]],
@@ -178,8 +178,6 @@ class Fluxonium(Qubit):
         else:
             raise NotImplementedError
 
-        if self.basis.transformation:
-            return transform_basis(hamil.real, self.basis.transformation)
         return hamil.real
 
     def hamiltonian(
@@ -188,8 +186,12 @@ class Fluxonium(Qubit):
         as_qobj=False
     ) -> np.ndarray:
         hamil = self._get_hamiltonian()
+
+        if self.basis.transformation is not None:
+            hamil = transform_basis(hamil, self.basis.transformation)
+
         if as_qobj:
-            dim = self.dim_hilbert
+            dim = hamil.shape[0]
             qobj_op = Qobj(
                 inpt=hamil,
                 dims=[[dim], [dim]],
