@@ -1,5 +1,5 @@
 # %%
-from typing import Union, Optional
+from typing import Union, Optional, List, Tuple
 import warnings
 
 import numpy as np
@@ -11,7 +11,8 @@ from qutip import Qobj
 # %%
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
-from ..util.linalg import transform_basis
+from ..util.linalg import transform_basis, get_mat_elem
+from ..util.phys import average_photon
 
 # %%
 
@@ -275,3 +276,99 @@ class Fluxonium(Qubit):
         )
 
         return dataset
+    
+    def _get_dielectric_jump(
+        self,
+        k: int,
+        m: int, 
+        qdiel: float, 
+        beta: float, 
+        lev: int = 5
+    ) -> Tuple[np.ndarray]:
+        if qdiel < 0 or beta < 0:
+            raise ValueError("Quality factor qdiel and (absolute)" + \
+                "inverse temperature beta must be positive.")
+        
+        if lev < 2:
+            raise ValueError("The number of levels included lev must be " + \
+                " larger than 1")
+        elif lev > self.dim_hilbert:
+            raise ValueError("The number of levels included lev must be " + \
+                " smaller than the initial Hilbert space dimension")
+        
+        if k == m:
+            raise ValueError("Eigenstate labels k and m must be different.")
+        
+        if k < 0 or m < 0:
+            raise ValueError("Eigenstate labels k and m must be positive.")
+        elif k >= lev or m >= self.dim_hilbert:
+            raise ValueError("Eigenstate labels k and m must be smaller than" + \
+                " the number of levels included.")
+
+        if k > m:
+            k, m = m, k
+        
+        down_op = np.zeros([lev, lev], dtype=float)
+        down_op[k, m] = 1
+        up_op = down_op.transpose()
+
+        eig_en, eig_vec = self.eig_states([k, m])
+        energy_diff = (eig_en[1] - eig_en[0])/self._ec
+        
+        phi_km = get_mat_elem(self.flux_op(), eig_vec[1], eig_vec[0])
+
+        gamma = self._ec*1/(4*qdiel)*energy_diff**2*np.abs(phi_km)**2
+        nth = average_photon(energy_diff*self._ec, beta)
+
+        jump_down = np.sqrt(gamma*(nth + 1))*down_op
+        jump_up = np.sqrt(gamma*nth)*up_op
+
+        return (jump_down, jump_up)
+    
+    def dielectric_jump(
+        self,
+        k: int,
+        m: int, 
+        qdiel: float, 
+        beta: float, 
+        lev: int = 5,
+        as_qobj=False
+    ) -> Tuple[np.ndarray]:
+        jump_down, jump_up = self._get_dielectric_jump(k, m, qdiel, beta, lev)
+        if as_qobj:
+            dim = lev
+            jump_down_qobj = Qobj(
+                inpt=jump_down,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type='oper',
+                isherm=True
+            )
+            jump_up_qobj = Qobj(
+                inpt=jump_up,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type='oper',
+                isherm=True
+            )
+            return jump_down_qobj, jump_up_qobj
+        return jump_down, jump_up
+    
+    def dielectric_loss(
+        self,
+        qdiel: float,
+        beta: float,
+        lev: int = 5,
+        as_qobj=False
+    ) -> Tuple[np.ndarray]:
+        jump_list = []
+        for k in range(0, lev):
+            for m in range(k+1, lev):
+                jump_list.extend(self.dielectric_jump(k, m, qdiel, 
+                    beta, lev, as_qobj))
+        return jump_list
+
+    
+    
+
+

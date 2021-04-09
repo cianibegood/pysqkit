@@ -154,7 +154,8 @@ class Qubit(ABC):
 
             else:
                 raise ValueError(
-                    "Given operator string not supported by the qubit or its basis {}".format(str(self.basis)))
+                    "Given operator string not supported by" + \
+                        "the qubit or its basis {}".format(str(self.basis)))
         elif isinstance(operator, np.ndarray):
             op = operator
         else:
@@ -177,7 +178,7 @@ class Qubit(ABC):
 
         data_arr = xr.DataArray(
             data=mat_elems,
-            dims=['in_leves', 'out_levels'],
+            dims=['in_levels', 'out_levels'],
             coords=dict(
                 in_levels=levels,
                 out_levens=levels,
