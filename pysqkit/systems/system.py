@@ -133,8 +133,6 @@ class Qubit(ABC):
     def mat_elements(
         self,
         operator: Union[str, np.ndarray],
-        in_states: Optional[np.ndarray] = None,
-        out_states: Optional[np.ndarray] = None,
         levels: Union[int, np.ndarray] = 10,
         *,
         get_data=False,
@@ -165,17 +163,15 @@ class Qubit(ABC):
         else:
             raise ValueError("Incorrect operator provided")
 
-        if in_states is None:
-            _, in_states = self.eig_states(levels=levels)
-        else:
-            raise NotImplementedError
-
-        if out_states is None:
-            _, out_states = self.eig_states(levels=levels)
-        else:
-            raise NotImplementedError
+        _, in_states = self.eig_states(levels=levels)
+        _, out_states = self.eig_states(levels=levels)
 
         mat_elems = get_mat_elem(op, in_states, out_states)
+
+        if isinstance(levels, int):
+            levels_arr = list(range(levels))
+        elif isinstance(levels, Iterable):
+            levels_arr = list(levels)
 
         if get_data:
             return mat_elems
@@ -184,8 +180,8 @@ class Qubit(ABC):
             data=mat_elems,
             dims=['in_levels', 'out_levels'],
             coords=dict(
-                in_levels=levels,
-                out_levens=levels,
+                in_levels=levels_arr,
+                out_levels=levels_arr,
             ),
             attrs=dict(
                 operator=op,
