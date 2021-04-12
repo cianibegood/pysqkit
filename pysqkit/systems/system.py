@@ -135,7 +135,7 @@ class Qubit(ABC):
         operator: Union[str, np.ndarray],
         levels: Union[int, Iterable[int]] = 10,
         *,
-        get_data=False,
+        as_xarray: Optional[bool] = False,
     ) -> np.ndarray:
         if isinstance(operator, str):
             if hasattr(self.basis, operator):
@@ -173,25 +173,24 @@ class Qubit(ABC):
         elif isinstance(levels, Iterable):
             levels_arr = list(levels)
 
-        if get_data:
-            return mat_elems
-
-        data_arr = xr.DataArray(
-            data=mat_elems,
-            dims=['in_levels', 'out_levels'],
-            coords=dict(
-                in_levels=levels_arr,
-                out_levels=levels_arr,
-            ),
-            attrs=dict(
-                operator=op,
-                dim_hilbert=self.dim_hilbert,
-                basis=str(self.basis),
-                **self._qubit_attrs
+        if as_xarray:
+            data_arr = xr.DataArray(
+                data=mat_elems,
+                dims=['in_levels', 'out_levels'],
+                coords=dict(
+                    in_levels=levels_arr,
+                    out_levels=levels_arr,
+                ),
+                attrs=dict(
+                    operator=op,
+                    dim_hilbert=self.dim_hilbert,
+                    basis=str(self.basis),
+                    **self._qubit_attrs
+                )
             )
-        )
 
-        return data_arr
+            return data_arr
+        return mat_elems
 
     def couple_to(
         self,
