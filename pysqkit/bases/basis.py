@@ -47,4 +47,4 @@ class OperatorBasis(ABC):
                 )
             )
 
-            self._transformation = transform_mat
+        self._transformation = transform_mat
