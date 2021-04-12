@@ -133,7 +133,7 @@ class Qubit(ABC):
     def mat_elements(
         self,
         operator: Union[str, np.ndarray],
-        levels: Union[int, np.ndarray] = 10,
+        levels: Union[int, Iterable[int]] = 10,
         *,
         get_data=False,
     ) -> np.ndarray:
@@ -156,8 +156,8 @@ class Qubit(ABC):
 
             else:
                 raise ValueError(
-                    "Given operator string not supported by" + \
-                        "the qubit or its basis {}".format(str(self.basis)))
+                    "Given operator string not supported by" +
+                    "the qubit or its basis {}".format(str(self.basis)))
         elif isinstance(operator, np.ndarray):
             op = operator
         else:
