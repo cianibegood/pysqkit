@@ -60,6 +60,10 @@ class Qubit(ABC):
     def _qubit_attrs(self) -> dict:
         pass
 
+    @abstractmethod
+    def dielectric_loss(self) -> List[np.ndarray]:
+        pass
+
     def _get_eig_vals(self, subset_inds: Tuple[int]) -> np.ndarray:
         hamil = self.hamiltonian()
         eig_vals = la.eigh(
@@ -338,7 +342,7 @@ class QubitSystem:
         for qubit in qubits:
             if not isinstance(qubit, Qubit):
                 raise ValueError(
-                    "Each qubit must a pysqkit.Qubit object, "
+                    "Each qubit must be a pysqkit.Qubit object, "
                     "instead got {}".format(type(qubit)))
 
             if qubit.label in qubit_labels:

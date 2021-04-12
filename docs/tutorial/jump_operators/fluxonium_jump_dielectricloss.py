@@ -31,4 +31,7 @@ flx.dielectric_jump(k, m, qdiel, beta)
 jump_down, jump_up = flx.dielectric_jump(k, m, qdiel, beta, as_qobj=False)
 jump_diel = flx.dielectric_loss(qdiel, beta, as_qobj=True)
 
+
+
+
 # %%
