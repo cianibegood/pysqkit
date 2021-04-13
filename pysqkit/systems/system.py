@@ -60,6 +60,13 @@ class Qubit(ABC):
     def _qubit_attrs(self) -> dict:
         pass
 
+<<<<<<< HEAD
+=======
+    @abstractmethod
+    def dielectric_loss(self) -> List[np.ndarray]:
+        pass
+
+>>>>>>> development
     def _get_eig_vals(self, subset_inds: Tuple[int]) -> np.ndarray:
         hamil = self.hamiltonian()
         eig_vals = la.eigh(
@@ -129,11 +136,17 @@ class Qubit(ABC):
     def mat_elements(
         self,
         operator: Union[str, np.ndarray],
+<<<<<<< HEAD
         in_states: Optional[np.ndarray] = None,
         out_states: Optional[np.ndarray] = None,
         levels: Union[int, np.ndarray] = 10,
         *,
         get_data=False,
+=======
+        levels: Union[int, Iterable[int]] = 10,
+        *,
+        as_xarray: Optional[bool] = False,
+>>>>>>> development
     ) -> np.ndarray:
         if isinstance(operator, str):
             if hasattr(self.basis, operator):
@@ -154,12 +167,18 @@ class Qubit(ABC):
 
             else:
                 raise ValueError(
+<<<<<<< HEAD
                     "Given operator string not supported by the qubit or its basis {}".format(str(self.basis)))
+=======
+                    "Given operator string not supported by" +
+                    "the qubit or its basis {}".format(str(self.basis)))
+>>>>>>> development
         elif isinstance(operator, np.ndarray):
             op = operator
         else:
             raise ValueError("Incorrect operator provided")
 
+<<<<<<< HEAD
         if in_states is None:
             _, in_states = self.eig_states(levels=levels)
         else:
@@ -191,6 +210,36 @@ class Qubit(ABC):
         )
 
         return data_arr
+=======
+        _, in_states = self.eig_states(levels=levels)
+        _, out_states = self.eig_states(levels=levels)
+
+        mat_elems = get_mat_elem(op, in_states, out_states)
+
+        if isinstance(levels, int):
+            levels_arr = list(range(levels))
+        elif isinstance(levels, Iterable):
+            levels_arr = list(levels)
+
+        if as_xarray:
+            data_arr = xr.DataArray(
+                data=mat_elems,
+                dims=['in_levels', 'out_levels'],
+                coords=dict(
+                    in_levels=levels_arr,
+                    out_levels=levels_arr,
+                ),
+                attrs=dict(
+                    operator=op,
+                    dim_hilbert=self.dim_hilbert,
+                    basis=str(self.basis),
+                    **self._qubit_attrs
+                )
+            )
+
+            return data_arr
+        return mat_elems
+>>>>>>> development
 
     def couple_to(
         self,
@@ -236,7 +285,11 @@ class Coupling:
         if isinstance(operators, dict):
             self._ops = [operators]
         elif isinstance(operators, Iterable):
+<<<<<<< HEAD
             self._ops = operators
+=======
+            self._ops = list(operators)
+>>>>>>> development
 
         for op in self._ops:
             for key, val in op.items():
@@ -263,7 +316,11 @@ class Coupling:
 
         self._hilbert_dims = {}
         for op in self._ops:
+<<<<<<< HEAD
             for qubit, qubit_op in operators.items():
+=======
+            for qubit, qubit_op in op.items():
+>>>>>>> development
                 if len(qubit_op.shape) != 2 or qubit_op.shape[0] != qubit_op.shape[1]:
                     raise ValueError("Each operator must be a square matrix")
 
@@ -337,7 +394,11 @@ class QubitSystem:
         for qubit in qubits:
             if not isinstance(qubit, Qubit):
                 raise ValueError(
+<<<<<<< HEAD
                     "Each qubit must a pysqkit.Qubit object, "
+=======
+                    "Each qubit must be a pysqkit.Qubit object, "
+>>>>>>> development
                     "instead got {}".format(type(qubit)))
 
             if qubit.label in qubit_labels:

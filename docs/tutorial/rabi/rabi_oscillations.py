@@ -5,16 +5,9 @@ Rabi oscillations in the schroedinger pictures without RWA
 import numpy as np 
 import matplotlib.pyplot as plt
 import qutip as qtp 
-
-import sys
-
-parent_path = "C:\\Users\\nicol\\Git\\QuTech 2021\\pysqkit" #"..\\..\\.." 
-sys.path.append(parent_path)
-
-
 from pysqkit.solvers import solvkit
-# from matplotlib import rcPxarams 
-# rcParams['mathtext.fontset'] = 'cm'
+from matplotlib import rcParams 
+rcParams['mathtext.fontset'] = 'cm'
 
 
 def plot_rabi(tlist, sz_avg):
