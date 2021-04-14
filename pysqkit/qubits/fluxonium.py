@@ -1,6 +1,7 @@
 # %%
 from typing import Union, Optional, List, Tuple
 import warnings
+from copy import copy
 
 import numpy as np
 from scipy import linalg as la
@@ -50,6 +51,17 @@ class Fluxonium(Qubit):
                 raise NotImplementedError("Basis not supported yet")
 
         super().__init__(label=label, basis=basis)
+
+    def __copy__(self) -> 'Fluxonium':
+        qubit_copy = self.__class__(
+            self.label,
+            self.charge_energy,
+            self.induct_energy,
+            self.joseph_energy,
+            self.flux,
+            basis=copy(self.basis),
+        )
+        return qubit_copy
 
     @property
     def charge_energy(self) -> float:

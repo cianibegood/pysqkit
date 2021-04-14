@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import List, Union
+from typing import List
 
 import numpy as np
 
@@ -19,7 +19,19 @@ class OperatorBasis(ABC):
         self._trunc_dim = None
 
         self._subsys_ind = None
-        self._sys_bases = None
+        self._sys_dims = None
+
+    def __copy__(self):
+        basis_copy = self.__class__(
+            self._dim_hilbert
+        )
+
+        basis_copy._transformation = self._transformation
+        basis_copy._trunc_dim = self._trunc_dim
+        basis_copy._subsys_ind = self._subsys_ind
+        basis_copy._sys_dims = self._sys_dims
+
+        return basis_copy
 
     @property
     def dim_hilbert(self) -> int:
@@ -34,7 +46,7 @@ class OperatorBasis(ABC):
     @property
     def sys_truncated_dims(self) -> List[int]:
         if self.is_subbasis:
-            return [basis.truncated_dim for basis in self._sys_bases]
+            return self._sys_dims
         return [self.truncated_dim]
 
     @dim_hilbert.setter
@@ -73,7 +85,7 @@ class OperatorBasis(ABC):
                 "The operator must be a square 2D matrix, "
                 "instead got shape {}".format(
                     op.shape)
-            if op_dim <= self._trunc_dim:
+            if op_dim < self._trunc_dim:
                 raise ValueError(
                     "Operator dimensions are smaller than "
                     " the truncated dimension")
@@ -93,8 +105,8 @@ class OperatorBasis(ABC):
     def expand_op(self, op: np.ndarray) -> np.ndarray:
         if self.is_subbasis:
             _ops = [
-                op if b_ind == self._subsys_ind else id_op(basis.truncated_dim)
-                for b_ind, basis in enumerate(self._sys_bases)
+                op if i == self._subsys_ind else id_op(dim)
+                for i, dim in enumerate(self._sys_dims)
             ]
             return tensor_prod(_ops)
         return op
@@ -102,16 +114,22 @@ class OperatorBasis(ABC):
     def finalize_op(self, op: np.ndarray) -> np.ndarray:
         return self.expand_op(self.truncate_op(self.transform_op(op)))
 
-    def embed(self, subsys_ind: int, sys_bases: List['OperatorBasis']) -> None:
+    def embed(self, subsys_ind: int, sys_dims: List[int]) -> None:
         if not isinstance(subsys_ind, int):
             raise ValueError("The subsystem index provided must be an integer")
-        if subsys_ind < 0 or subsys_ind > len(sys_bases):
+
+        if subsys_ind < 0 or subsys_ind > len(sys_dims):
             raise ValueError(
                 "Subsystem index must be an integer between 0 and the"
-                "total number of subsystem {}".format(len(sys_bases)))
+                "total number of subsystem {}".format(len(sys_dims)))
+
+        if sys_dims[subsys_ind] != self.truncated_dim:
+            raise ValueError("Mismatch between basis dimension and the "
+                             "specified system dimensions"
+                             " (given the provided index).")
 
         self._subsys_ind = subsys_ind
-        self._sys_bases = sys_bases
+        self._sys_dims = sys_dims
 
     def truncate(self, dim: int) -> None:
         if not isinstance(dim, int) or dim <= 0:
@@ -133,9 +151,9 @@ class OperatorBasis(ABC):
                 )
             )
 
-        basis_dim = transform_mat.shape[0]
+        dim = transform_mat.shape[0]
 
-        if transform_mat.shape != (basis_dim, basis_dim) or basis_dim != self._dim_hilbert:
+        if transform_mat.shape != (dim, dim) or dim != self._dim_hilbert:
             raise ValueError(
                 "The transformaton matrix should be a 2D square matrix, "
                 "with the same dimensionality as the basis, "
