@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
 from itertools import chain
+from copy import copy
+from functools import reduce
 
 import numpy as np
 from scipy import linalg as la
 import xarray as xr
+from qutip import Qobj
 
-from ..operators import id_op
 from ..bases import OperatorBasis
 from ..util.linalg import order_vecs, get_mat_elem, tensor_prod
 
@@ -129,6 +131,15 @@ class Qubit(ABC):
         if sel_inds:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
+
+    def diagonlize_basis(self, num_levels: Optional[int] = 6) -> None:
+        if not isinstance(num_levels, int) or num_levels <= 1:
+            raise ValueError(
+                "Number of levels must be an integer greater than 1")
+
+        _, eig_states = self.eig_states(levels=self.dim_hilbert)
+        self.basis.transform(eig_states)
+        self.basis.truncate(num_levels)
 
     def mat_elements(
         self,
@@ -345,10 +356,21 @@ class QubitSystem:
                     "Multiple qubits share the same label, "
                     "please ensure each qubit is uniquely labeled."
                 )
+
+            if qubit.basis.is_subbasis:
+                raise ValueError(
+                    "The basis of qubit {} is a subbasis, please ensure qubits"
+                    "are not part of a system already".format(qubit.label)
+                )
+
             qubit_labels.append(qubit.label)
 
-        self._qubits = list(qubits)
+        self._qubits = [copy(qubit) for qubit in qubits]
         self._labels = qubit_labels
+
+        sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
+        for qubit_ind, qubit in enumerate(self._qubits):
+            qubit.basis.embed(qubit_ind, sys_dims)
 
         if coupling is not None:
             if not isinstance(coupling, Iterable):
@@ -420,93 +442,60 @@ class QubitSystem:
         else:
             raise ValueError("Qubit {} not in system".format(label))
 
-    def bare_hamiltonian(
-        self,
-        *,
-        truncated_levels: Optional[Dict[str, int]] = None
-    ) -> np.ndarray:
-        if truncated_levels:
-            if not isinstance(truncated_levels, dict):
-                raise ValueError(
-                    "The truncated levels must be provided as a dictionary")
+    def bare_hamiltonian(self, *, as_qobj=False) -> np.ndarray:
+        bare_hamiltonians = [qubit.hamiltonian() for qubit in self._qubits]
+        bare_hamil = np.sum(bare_hamiltonians, axis=0)
 
-        if truncated_levels:
-            subsys_dims = {
-                q.label: truncated_levels[q.label] if q.label in truncated_levels else 6 for q in self.qubits}
-        else:
-            subsys_dims = {qubit.label: 6 for qubit in self.qubits}
+        if as_qobj:
+            sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
 
-        sys_dim = np.prod(list(subsys_dims.values()))
+            qobj_op = Qobj(
+                inpt=bare_hamil,
+                dims=[sys_dims, sys_dims],
+                shape=bare_hamil.shape,
+                type='oper',
+                isherm=True
+            )
+            return qobj_op
+        return bare_hamil
 
-        bare_hamiltonian = np.zeros((sys_dim, sys_dim), dtype=complex)
-
-        for subsys_ind, subsys_qubit in enumerate(self.qubits):
-            eig_energies = subsys_qubit.eig_energies(
-                levels=subsys_dims[subsys_qubit.label])
-            q_hamil = np.diag(eig_energies)
-
-            subsys_ops = [q_hamil if q.label == subsys_qubit.label else id_op(
-                subsys_dims[q.label]) for q in self.qubits]
-            subsys_hamil = tensor_prod(subsys_ops)
-
-            bare_hamiltonian += subsys_hamil
-
-        return bare_hamiltonian
-
-    def int_hamiltonian(
-        self,
-        *,
-        truncated_levels: Optional[Dict[str, int]] = None
-    ) -> np.ndarray:
-        if truncated_levels:
-            if not isinstance(truncated_levels, dict):
-                raise ValueError(
-                    "The truncated levels must be provided as a dictionary")
-
-        if truncated_levels:
-            subsys_dims = {
-                q.label: truncated_levels[q.label] if q in truncated_levels else 6 for q in self.qubits}
-        else:
-            subsys_dims = {qubit.label: 6 for qubit in self.qubits}
-
-        sys_dim = np.prod(list(subsys_dims.values()))
+    def int_hamiltonian(self, *, as_qobj=False) -> np.ndarray:
+        sys_dim = np.prod(
+            [qubit.basis.truncated_dim for qubit in self._qubits])
 
         int_hamiltonian = np.zeros((sys_dim, sys_dim), dtype=complex)
 
         if self._coupling:
             for coup in self._coupling:
-                for prefactor, term_ops in coup.hamiltonian_terms(tensor_ops=False):
-                    coupled_qubits = list(term_ops.keys())
+                coup_terms = coup.hamiltonian_terms(tensor_ops=False)
+                for prefactor, term_ops in coup_terms:
+                    ops = []
+                    for qubit, qubit_op in term_ops.items():
+                        q_ind = self.index(qubit)
+                        op = self._qubits[q_ind].basis.expand_op(qubit_op)
+                        ops.append(op)
 
-                    diag_ops = []
-                    for qubit in self.qubits:
-                        if qubit.label in coupled_qubits:
-                            q_op = qubit.mat_elements(
-                                term_ops[qubit.label],
-                                levels=subsys_dims[qubit.label]
-                            )
-                            diag_ops.append(q_op)
-                        else:
-                            diag_ops.append(id_op(subsys_dims[qubit.label]))
+                    int_hamiltonian += prefactor * reduce(np.matmul, ops)
 
-                    op = tensor_prod(diag_ops)
+        if as_qobj:
+            sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
 
-                    int_hamiltonian += prefactor * op
+            qobj_op = Qobj(
+                inpt=int_hamiltonian,
+                dims=[sys_dims, sys_dims],
+                shape=int_hamiltonian.shape,
+                type='oper',
+                isherm=True
+            )
+            return qobj_op
+
         return int_hamiltonian
 
-    def hamiltonian(
-            self,
-            *,
-            truncated_levels: Optional[Dict[str, int]] = None
-    ) -> np.ndarray:
+    def hamiltonian(self, *, as_qobj=False) -> np.ndarray:
 
-        bare_hamiltonian = self.bare_hamiltonian(
-            truncated_levels=truncated_levels
-        )
+        bare_hamiltonian = self.bare_hamiltonian(as_qobj=as_qobj)
 
-        int_hamiltonian = self.int_hamiltonian(
-            truncated_levels=truncated_levels
-        )
+        int_hamiltonian = self.int_hamiltonian(as_qobj=as_qobj)
 
         return bare_hamiltonian + int_hamiltonian
 
