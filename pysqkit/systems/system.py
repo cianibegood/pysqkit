@@ -5,6 +5,7 @@ from copy import copy
 from functools import reduce
 
 import numpy as np
+from qutip.qobj import dims
 from scipy import linalg as la
 import xarray as xr
 from qutip import Qobj
@@ -43,8 +44,8 @@ class Qubit(ABC):
         self._basis = new_basis
 
     @property
-    def dim_hilbert(self):
-        return self._basis.dim_hilbert
+    def dim_hilbert(self) -> int:
+        return self._basis.truncated_dim
 
     @abstractmethod
     def hamiltonian(self) -> np.ndarray:
@@ -86,56 +87,34 @@ class Qubit(ABC):
 
     def eig_energies(
         self,
-        levels: Optional[Union[int, Iterable[int]]] = 10
+        levels: Optional[Union[int, Iterable[int]]] = None
     ) -> np.ndarray:
-        if levels is not None:
-            if isinstance(levels, int):
-                if levels <= 1:
-                    raise ValueError(
-                        "Number of levels must be an integer greater than 1")
-                subset_inds = (0, levels - 1)
-                sel_inds = None
-            elif isinstance(levels, Iterable):
-                subset_inds = min(levels), max(levels)
-                _inds = list(range(subset_inds[0], subset_inds[1] + 1))
-                sel_inds = [_inds.index(level) for level in levels]
-        else:
-            subset_inds = None
-            sel_inds = None
-
+        subset_inds, sel_inds = self._parse_levels(levels)
         eig_vals = self._get_eig_vals(subset_inds)
-        if sel_inds:
+        if sel_inds is not None:
             return order_vecs(eig_vals[sel_inds])
         return order_vecs(eig_vals)
 
     def eig_states(
             self,
-            levels: Optional[Union[int, Iterable[int]]] = 10
+            levels: Optional[Union[int, Iterable[int]]] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        if levels is not None:
-            if isinstance(levels, int):
-                if levels <= 1:
-                    raise ValueError(
-                        "Number of levels must be an integer greater than 1")
-                subset_inds = (0, levels - 1)
-                sel_inds = None
-            elif isinstance(levels, Iterable):
-                subset_inds = min(levels), max(levels)
-                _inds = list(range(subset_inds[0], subset_inds[1] + 1))
-                sel_inds = [_inds.index(level) for level in levels]
-        else:
-            subset_inds = None
-            sel_inds = None
-
+        subset_inds, sel_inds = self._parse_levels(levels)
         eig_vals, eig_vecs = self._get_eig_states(subset_inds)
-        if sel_inds:
+        if sel_inds is not None:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
-    def diagonlize_basis(self, num_levels: Optional[int] = 6) -> None:
-        if not isinstance(num_levels, int) or num_levels <= 1:
+    def diagonlize_basis(self, num_levels: int) -> None:
+        if not isinstance(num_levels, int):
             raise ValueError(
-                "Number of levels must be an integer greater than 1")
+                "Number of levels must be an integer")
+        if num_levels < 1 or num_levels > self.dim_hilbert:
+            raise ValueError(
+                "The number of level must be between 1 "
+                "and the dimensionality of the "
+                "system d={}".format(self.dim_hilbert)
+            )
 
         _, eig_states = self.eig_states(levels=self.dim_hilbert)
         self.basis.transform(eig_states)
@@ -144,7 +123,7 @@ class Qubit(ABC):
     def mat_elements(
         self,
         operator: Union[str, np.ndarray],
-        levels: Union[int, Iterable[int]] = 10,
+        levels: Union[int, Iterable[int]] = None,
         *,
         as_xarray: Optional[bool] = False,
     ) -> np.ndarray:
@@ -179,10 +158,13 @@ class Qubit(ABC):
 
         mat_elems = get_mat_elem(op, in_states, out_states)
 
-        if isinstance(levels, int):
-            levels_arr = list(range(levels))
-        elif isinstance(levels, Iterable):
-            levels_arr = list(levels)
+        if levels is not None:
+            if isinstance(levels, int):
+                levels_arr = list(range(levels))
+            elif isinstance(levels, Iterable):
+                levels_arr = list(levels)
+        else:
+            levels_arr = list(range(self.dim_hilbert))
 
         if as_xarray:
             data_arr = xr.DataArray(
@@ -234,6 +216,42 @@ class Qubit(ABC):
                 )
         else:
             return QubitSystem(qubits)
+
+    def _parse_levels(self, levels: Union[int, Iterable[int]]):
+        if levels is not None:
+            if isinstance(levels, int):
+                if levels < 1:
+                    raise ValueError(
+                        "Number of levels must be an integer greater than 1")
+                if levels > self.dim_hilbert:
+                    raise ValueError(
+                        "Number of levels exceeds the "
+                        "basis dimensionality of d={}".format(self.dim_hilbert)
+                    )
+                subset_inds = (0, levels - 1)
+                sel_inds = None
+            elif isinstance(levels, Iterable):
+                subset_inds = min(levels), max(levels)
+                if subset_inds[0] < 0:
+                    raise ValueError(
+                        "The lowest level index must be an integer "
+                        "greater or equal to 0, "
+                        "instead got {}".format(subset_inds[0])
+                    )
+                if subset_inds[1] >= self.dim_hilbert:
+                    raise ValueError(
+                        "The largest level index must be an integer "
+                        "smaller then the basis dimensionality {}, "
+                        "instead got {}".format(
+                            self.dim_hilbert, subset_inds[1])
+                    )
+                _inds = list(range(subset_inds[0], subset_inds[1] + 1))
+                sel_inds = [_inds.index(level) for level in levels]
+        else:
+            subset_inds = None
+            sel_inds = None
+
+        return subset_inds, sel_inds
 
 
 class Coupling:
@@ -427,6 +445,10 @@ class QubitSystem:
     def qubits(self) -> List[Qubit]:
         return self._qubits
 
+    @property
+    def dim_hilbert(self) -> int:
+        return np.prod([q.dim_hilbert for q in self.qubits])
+
     def index(self, qubit: Union[str, Qubit]) -> int:
         if isinstance(qubit, str):
             label = qubit
@@ -492,9 +514,7 @@ class QubitSystem:
         return int_hamiltonian
 
     def hamiltonian(self, *, as_qobj=False) -> np.ndarray:
-
         bare_hamiltonian = self.bare_hamiltonian(as_qobj=as_qobj)
-
         int_hamiltonian = self.int_hamiltonian(as_qobj=as_qobj)
 
         return bare_hamiltonian + int_hamiltonian
@@ -502,10 +522,8 @@ class QubitSystem:
     def _get_eig_vals(
         self,
         subset_inds: Tuple[int],
-        *,
-        truncated_levels: Optional[Dict[str, int]] = None
     ) -> np.ndarray:
-        hamil = self.hamiltonian(truncated_levels=truncated_levels)
+        hamil = self.hamiltonian()
         eig_vals = la.eigh(
             hamil,
             eigvals_only=True,
@@ -516,10 +534,8 @@ class QubitSystem:
     def _get_eig_states(
         self,
         subset_inds: Tuple[int],
-        *,
-        truncated_levels: Optional[Dict[str, int]] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        hamil = self.hamiltonian(truncated_levels=truncated_levels)
+        hamil = self.hamiltonian()
         eig_vals, eig_vecs = la.eigh(
             hamil,
             eigvals_only=False,
@@ -529,52 +545,58 @@ class QubitSystem:
 
     def eig_energies(
         self,
-        levels: Optional[Union[int, Iterable[int]]] = 10,
-        truncated_levels: Optional[Dict[str, int]] = None,
+        levels: Optional[Union[int, Iterable[int]]] = None,
     ) -> np.ndarray:
-        if levels is not None:
-            if isinstance(levels, int):
-                if levels <= 1:
-                    raise ValueError(
-                        "Number of levels must be an integer greater than 1")
-                subset_inds = (0, levels - 1)
-                sel_inds = None
-            elif isinstance(levels, Iterable):
-                subset_inds = min(levels), max(levels)
-                _inds = list(range(subset_inds[0], subset_inds[1] + 1))
-                sel_inds = [_inds.index(level) for level in levels]
-        else:
-            subset_inds = None
-            sel_inds = None
+        subset_inds, sel_inds = self._parse_levels(levels)
 
-        eig_vals = self._get_eig_vals(
-            subset_inds, truncated_levels=truncated_levels)
+        eig_vals = self._get_eig_vals(subset_inds)
         if sel_inds:
             return order_vecs(eig_vals[sel_inds])
         return order_vecs(eig_vals)
 
     def eig_states(
             self,
-            levels: Optional[Union[int, Iterable[int]]] = 10,
-            truncated_levels: Optional[Dict[str, int]] = None,
+            levels: Optional[Union[int, Iterable[int]]] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
+        subset_inds, sel_inds = self._parse_levels(levels)
+
+        eig_vals, eig_vecs = self._get_eig_states(subset_inds)
+        if sel_inds:
+            return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
+        return order_vecs(eig_vals, eig_vecs)
+
+    def _parse_levels(self, levels: Union[int, Iterable[int]]):
         if levels is not None:
             if isinstance(levels, int):
-                if levels <= 1:
+                if levels < 1:
                     raise ValueError(
                         "Number of levels must be an integer greater than 1")
+                if levels > self.dim_hilbert:
+                    raise ValueError(
+                        "Number of levels exceeds the "
+                        "basis dimensionality of d={}".format(self.dim_hilbert)
+                    )
                 subset_inds = (0, levels - 1)
                 sel_inds = None
             elif isinstance(levels, Iterable):
                 subset_inds = min(levels), max(levels)
+                if subset_inds[0] < 0:
+                    raise ValueError(
+                        "The lowest level index must be an integer "
+                        "greater or equal to 0, "
+                        "instead got {}".format(subset_inds[0])
+                    )
+                if subset_inds[1] >= self.dim_hilbert:
+                    raise ValueError(
+                        "The largest level index must be an integer "
+                        "smaller then the basis dimensionality {}, "
+                        "instead got {}".format(
+                            self.dim_hilbert, subset_inds[1])
+                    )
                 _inds = list(range(subset_inds[0], subset_inds[1] + 1))
                 sel_inds = [_inds.index(level) for level in levels]
         else:
             subset_inds = None
             sel_inds = None
 
-        eig_vals, eig_vecs = self._get_eig_states(
-            subset_inds, truncated_levels=truncated_levels)
-        if sel_inds:
-            return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
-        return order_vecs(eig_vals, eig_vecs)
+        return subset_inds, sel_inds
