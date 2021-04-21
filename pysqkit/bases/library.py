@@ -13,9 +13,6 @@ class FockBasis(OperatorBasis):
     TODO: __eq__ and __str__ method to be implemented as well.
     """
 
-    def __init__(self, dim_hilbert: int):
-        super().__init__(dim_hilbert)
-
     @property
     def low_op(self) -> np.ndarray:
         return low_op(self.dim_hilbert)
