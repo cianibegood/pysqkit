@@ -18,8 +18,6 @@ from ..util.phys import average_photon
 
 _supported_bases = (FockBasis, )
 
-rates = ["relaxation", "excitation"]
-
 pi = np.pi
 
 
