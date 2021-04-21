@@ -1,6 +1,7 @@
 # %%
 from typing import Union, Optional, List, Tuple
 import warnings
+from copy import copy
 
 import numpy as np
 from scipy import linalg as la
@@ -11,7 +12,7 @@ from qutip import Qobj
 # %%
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
-from ..util.linalg import transform_basis, get_mat_elem
+from ..util.linalg import get_mat_elem
 from ..util.phys import average_photon
 
 # %%
@@ -50,6 +51,17 @@ class Fluxonium(Qubit):
                 raise NotImplementedError("Basis not supported yet")
 
         super().__init__(label=label, basis=basis)
+
+    def __copy__(self) -> 'Fluxonium':
+        qubit_copy = self.__class__(
+            self.label,
+            self.charge_energy,
+            self.induct_energy,
+            self.joseph_energy,
+            self.flux,
+            basis=copy(self.basis),
+        )
+        return qubit_copy
 
     @property
     def charge_energy(self) -> float:
@@ -106,6 +118,7 @@ class Fluxonium(Qubit):
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * \
             (self.basis.raise_op - self.basis.low_op)
+
         return charge_op
 
     def charge_op(
@@ -113,17 +126,15 @@ class Fluxonium(Qubit):
         *,
         as_qobj=False,
     ) -> np.ndarray:
-        charge_op = self._get_charge_op()
-
-        if self.basis.transformation is not None:
-            charge_op = transform_basis(charge_op, self.basis.transformation)
+        charge_op = self.basis.finalize_op(self._get_charge_op())
 
         if as_qobj:
-            dim = charge_op.shape[0]
+            dim = self.basis.sys_truncated_dims
+
             qobj_op = Qobj(
                 inpt=charge_op,
-                dims=[[dim], [dim]],
-                shape=[dim, dim],
+                dims=[dim, dim],
+                shape=charge_op.shape,
                 type='oper',
                 isherm=True
             )
@@ -135,17 +146,15 @@ class Fluxonium(Qubit):
         return flux_op
 
     def flux_op(self, *, as_qobj=False) -> np.ndarray:
-        flux_op = self._get_flux_op()
-
-        if self.basis.transformation is not None:
-            flux_op = transform_basis(flux_op, self.basis.transformation)
+        flux_op = self.basis.finalize_op(self._get_flux_op())
 
         if as_qobj:
-            dim = flux_op.shape[0]
+            dim = self.basis.sys_truncated_dims
+
             qobj_op = Qobj(
                 inpt=flux_op,
-                dims=[[dim], [dim]],
-                shape=[dim, dim],
+                dims=[dim, dim],
+                shape=flux_op.shape,
                 type='oper',
                 isherm=True
             )
@@ -188,17 +197,15 @@ class Fluxonium(Qubit):
         *,
         as_qobj=False
     ) -> np.ndarray:
-        hamil = self._get_hamiltonian()
-
-        if self.basis.transformation is not None:
-            hamil = transform_basis(hamil, self.basis.transformation)
+        hamil = self.basis.finalize_op(self._get_hamiltonian())
 
         if as_qobj:
-            dim = hamil.shape[0]
+            dim = self.basis.sys_truncated_dims
+
             qobj_op = Qobj(
                 inpt=hamil,
-                dims=[[dim], [dim]],
-                shape=[dim, dim],
+                dims=[dim, dim],
+                shape=hamil.shape,
                 type='oper',
                 isherm=True
             )
@@ -278,29 +285,29 @@ class Fluxonium(Qubit):
         )
 
         return dataset
-    
+
     def dielectric_rates(
         self,
         level_k: int,
-        level_m: int, 
-        qdiel: float, 
-        beta: float,  
+        level_m: int,
+        qdiel: float,
+        beta: float,
     ) -> Tuple[float, float]:
         if qdiel < 0 or beta < 0:
-            raise ValueError("Quality factor qdiel and (absolute) " \
-                "inverse temperature beta must be positive.")
-        
+            raise ValueError("Quality factor qdiel and (absolute) "
+                             "inverse temperature beta must be positive.")
+
         if level_k == level_m:
-            raise ValueError("Eigenstate labels level_k and level_m " \
-                "must be different.")
+            raise ValueError("Eigenstate labels level_k and level_m "
+                             "must be different.")
 
         if level_k < 0 or level_m < 0:
-            raise ValueError("Eigenstate labels level_k and level_m must " \
-                "be positive.")
+            raise ValueError("Eigenstate labels level_k and level_m must "
+                             "be positive.")
         elif level_k >= self.dim_hilbert or level_m >= self.dim_hilbert:
-            raise ValueError("Eigenstate labels k and m must be smaller than" \
-                " the Hilbert space dimension.")
-        
+            raise ValueError("Eigenstate labels k and m must be smaller than"
+                             " the Hilbert space dimension.")
+
         eig_en, eig_vec = self.eig_states([level_k, level_m])
         energy_diff = (eig_en[1] - eig_en[0])/self._ec
         phi_km = get_mat_elem(self.flux_op(), eig_vec[1], eig_vec[0])
@@ -312,49 +319,49 @@ class Fluxonium(Qubit):
         excitation_rate = gamma*nth
 
         return relaxation_rate, excitation_rate
-    
+
     def _get_dielectric_jump(
         self,
         level_k: int,
-        level_m: int, 
-        qdiel: float, 
-        beta: float, 
+        level_m: int,
+        qdiel: float,
+        beta: float,
         levels: int = 5
     ) -> Tuple[np.ndarray]:
 
         if levels < 2:
-            raise ValueError("The number of levels included must be " \
-                "larger than 1")
+            raise ValueError("The number of levels included must be "
+                             "larger than 1")
         elif levels > self.dim_hilbert:
-            raise ValueError("The number of levels included must be " \
-                "smaller than the initial Hilbert space dimension")
-        
+            raise ValueError("The number of levels included must be "
+                             "smaller than the initial Hilbert space dimension")
+
         if level_k > level_m:
             level_k, level_m = level_m, level_k
-        
+
         down_op = np.zeros([levels, levels], dtype=float)
         down_op[level_k, level_m] = 1
         up_op = down_op.transpose()
 
-        relaxation_rate, excitation_rate = self.dielectric_rates(level_k, 
-            level_m, qdiel, beta)
+        relaxation_rate, excitation_rate = self.dielectric_rates(level_k,
+                                                                 level_m, qdiel, beta)
 
         jump_down = np.sqrt(relaxation_rate)*down_op
         jump_up = np.sqrt(excitation_rate)*up_op
 
         return jump_down, jump_up
-    
+
     def dielectric_jump(
         self,
         level_k: int,
-        level_m: int, 
-        qdiel: float, 
-        beta: float, 
+        level_m: int,
+        qdiel: float,
+        beta: float,
         levels: int = 5,
         as_qobj=False
     ) -> Tuple[np.ndarray]:
-        jump_down, jump_up = self._get_dielectric_jump(level_k, level_m, 
-            qdiel, beta, levels)
+        jump_down, jump_up = self._get_dielectric_jump(level_k, level_m,
+                                                       qdiel, beta, levels)
         if as_qobj:
             dim = levels
             jump_down_qobj = Qobj(
@@ -373,7 +380,7 @@ class Fluxonium(Qubit):
             )
             return jump_down_qobj, jump_up_qobj
         return jump_down, jump_up
-    
+
     def dielectric_loss(
         self,
         qdiel: float,
@@ -384,11 +391,6 @@ class Fluxonium(Qubit):
         jump_list = []
         for level_k in range(0, levels):
             for level_m in range(level_k + 1, levels):
-                jump_list.extend(self.dielectric_jump(level_k, level_m, qdiel, 
-                    beta, levels, as_qobj))
+                jump_list.extend(self.dielectric_jump(level_k, level_m, qdiel,
+                                                      beta, levels, as_qobj))
         return jump_list
-
-    
-    
-
-
