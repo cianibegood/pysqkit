@@ -25,8 +25,6 @@ flx2 = fluxonium.Fluxonium('F2', ec, el[1], ej[1], flux[1], dim_hilbert=50)
 flx_sys = flx1.couple_to(flx2)
 
 # %%
-truncation = {'F1': 8, 'F2': 9}
-flx_sys.convert_subsys_operator('F1', 'CIAO', truncated_levels=truncation)
-
+flx_sys.charge_op
 
 # %%

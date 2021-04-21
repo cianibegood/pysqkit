@@ -432,8 +432,7 @@ class QubitSystem:
 
         if truncated_levels:
             subsys_dims = {
-                q.label: truncated_levels[q.label] if q.label in \
-                    truncated_levels else 6 for q in self.qubits}
+                q.label: truncated_levels[q.label] if q.label in truncated_levels else 6 for q in self.qubits}
         else:
             subsys_dims = {qubit.label: 6 for qubit in self.qubits}
 
@@ -590,33 +589,3 @@ class QubitSystem:
         if sel_inds:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
-    
-    def convert_subsys_operator(
-        self,
-        label: str,
-        op: np.ndarray,
-        truncated_levels: Optional[Dict[str, int]] = None,
-        as_qobj=False        
-    ) -> np.ndarray:
-        if label not in self._labels:
-            raise ValueError("Unknown qubit label")
-
-        if truncated_levels:
-            if not isinstance(truncated_levels, dict):
-                raise ValueError(
-                    "The truncated levels must be provided as a dictionary")
-
-        if truncated_levels:
-            subsys_dims = {
-                q.label: truncated_levels[q.label] if q.label in truncated_levels else 6 for q in self.qubits}
-        else:
-            subsys_dims = {qubit.label: 6 for qubit in self.qubits}
-
-        sys_dim = np.prod(list(subsys_dims.values()))
-
-        print(sys_dim)
-
-
-        
-
-        
