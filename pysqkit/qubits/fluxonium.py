@@ -19,8 +19,6 @@ from ..util.phys import average_photon
 
 _supported_bases = (FockBasis, )
 
-rates = ["relaxation", "excitation"]
-
 pi = np.pi
 
 
@@ -292,6 +290,7 @@ class Fluxonium(Qubit):
         level_m: int,
         qdiel: float,
         beta: float,
+        return_op = False
     ) -> Tuple[float, float]:
         if qdiel < 0 or beta < 0:
             raise ValueError("Quality factor qdiel and (absolute) "
@@ -307,6 +306,9 @@ class Fluxonium(Qubit):
         elif level_k >= self.dim_hilbert or level_m >= self.dim_hilbert:
             raise ValueError("Eigenstate labels k and m must be smaller than"
                              " the Hilbert space dimension.")
+        
+        if level_k > level_m:
+            level_k, level_m = level_m, level_k
 
         eig_en, eig_vec = self.eig_states([level_k, level_m])
         energy_diff = (eig_en[1] - eig_en[0])/self._ec
@@ -318,6 +320,10 @@ class Fluxonium(Qubit):
         relaxation_rate = gamma*(nth + 1)
         excitation_rate = gamma*nth
 
+        if return_op:
+            down_op = np.outer(eig_vec[0], np.conj(eig_vec[1]))
+            return relaxation_rate, excitation_rate, down_op
+
         return relaxation_rate, excitation_rate
 
     def _get_dielectric_jump(
@@ -325,26 +331,14 @@ class Fluxonium(Qubit):
         level_k: int,
         level_m: int,
         qdiel: float,
-        beta: float,
-        levels: int = 5
+        beta: float
     ) -> Tuple[np.ndarray]:
 
-        if levels < 2:
-            raise ValueError("The number of levels included must be "
-                             "larger than 1")
-        elif levels > self.dim_hilbert:
-            raise ValueError("The number of levels included must be "
-                             "smaller than the initial Hilbert space dimension")
-
-        if level_k > level_m:
-            level_k, level_m = level_m, level_k
-
-        down_op = np.zeros([levels, levels], dtype=float)
-        down_op[level_k, level_m] = 1
-        up_op = down_op.transpose()
-
-        relaxation_rate, excitation_rate = self.dielectric_rates(level_k,
-                                                                 level_m, qdiel, beta)
+        relaxation_rate, excitation_rate, down_op = \
+            self.dielectric_rates(level_k, level_m, \
+                qdiel, beta, return_op=True)
+        
+        up_op = down_op.conj().T
 
         jump_down = np.sqrt(relaxation_rate)*down_op
         jump_up = np.sqrt(excitation_rate)*up_op
@@ -357,13 +351,12 @@ class Fluxonium(Qubit):
         level_m: int,
         qdiel: float,
         beta: float,
-        levels: int = 5,
         as_qobj=False
     ) -> Tuple[np.ndarray]:
         jump_down, jump_up = self._get_dielectric_jump(level_k, level_m,
-                                                       qdiel, beta, levels)
+                                                       qdiel, beta)
         if as_qobj:
-            dim = levels
+            dim = self.dim_hilbert
             jump_down_qobj = Qobj(
                 inpt=jump_down,
                 dims=[[dim], [dim]],
@@ -385,12 +378,11 @@ class Fluxonium(Qubit):
         self,
         qdiel: float,
         beta: float,
-        levels: int = 5,
         as_qobj=False
     ) -> List[np.ndarray]:
         jump_list = []
-        for level_k in range(0, levels):
-            for level_m in range(level_k + 1, levels):
-                jump_list.extend(self.dielectric_jump(level_k, level_m, qdiel,
-                                                      beta, levels, as_qobj))
+        for level_k in range(0, self.dim_hilbert):
+            for level_m in range(level_k + 1, self.dim_hilbert):
+                jump_list.extend(self.dielectric_jump(level_k, level_m, qdiel, \
+                    beta, as_qobj))
         return jump_list
