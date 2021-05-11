@@ -31,7 +31,34 @@ def n_th(maxs, n):
     
     res = [int(k) for k in temp]
     return res
+
+## Defining gates
+def gate_from_Kraus(state_init, **kwargs):
+    ''' **kwargs should contain at least 'op_list' a list of Kraus operators '''
     
+    if state_init.type == "ket": 
+        print("Initial state has been transformed into a density matrix")
+        state_init = state_initnit * state_init.dag()
+    
+    res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
+    for op in kwargs['op_list']:
+        assert isinstance(op, qtp.Qobj)
+        res+= op*state_init*op.dag()
+    
+    return res
+
+
+def gate_from_U(state_init, **kwargs): 
+    ''' **kwargs should contain at least 'U' the unitary operator describing the gate '''
+    U = kwargs['U']
+    
+    if state_init.type == "ket": 
+        return qtp.Qobj(U) * state_init
+    elif state_init.type == "oper":
+        return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
+    else :
+        print("Type of state_init not recognized, must be ket or oper")
+        
     
 ## Visualisation
 def draw_mat(mat, mat_name, vmin = np.NaN, vmax = np.NaN):
@@ -62,8 +89,42 @@ def draw_mat(mat, mat_name, vmin = np.NaN, vmax = np.NaN):
 
     fig.colorbar(im2, ax=ax.ravel().tolist(), orientation = 'horizontal')
     
-    plt.show()
+    fig.show()
     #show and save ??
+    
+    
+def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN):
+    fig, ax = plt.subplots(len(mat_list), 3, figsize = (12,4*len(mat_list)))
+    
+    for i in range(len(mat_list)):
+        
+        if np.isnan(vmin):
+            vmin = min(np.min(mat_list[i].real), np.min(mat_list[i].imag))
+        if np.isnan(vmax):
+            vmax = np.max([np.max(mat_list[i].real), np.max(mat_list[i].imag)])
+            
+        
+        im0 = ax[i, 0].imshow(np.abs(mat_list[i]), vmin=vmin, vmax=vmax)
+        ax[i, 0].set_title("$| "+ mat_name_list[i] + "_{ij} |$")
+        ax[i, 0].set_xlabel('$i$')
+        ax[i, 0].set_ylabel('$j$')
+
+
+        im1 = ax[i, 1].imshow(mat_list[i].real, vmin=vmin, vmax=vmax)
+        ax[i, 1].set_title("$Re(  "+ mat_name_list[i] + "_{ij} )$")
+        ax[i, 1].set_xlabel('$i$')
+        ax[i, 1].set_ylabel('$j$')
+
+
+        ax[i, 2].imshow(mat_list[i].imag, vmin=vmin, vmax=vmax)
+        ax[i, 2].set_title("$Im(  "+ mat_name_list[i] + "_{ij} )$")
+        ax[i, 2].set_xlabel('$i$')
+        ax[i, 2].set_ylabel('$j$')
+
+        fig.colorbar(im0, ax=ax[i, :].ravel().tolist(), orientation = 'vertical')
+    
+    fig.show()
+    
     
 ### Tomography Preparation
 
@@ -254,7 +315,6 @@ def fct_to_lambda(fct,
     return lambda_mat
     
 ## lambda_to_chi  
-
 def lambda_to_chi(lambda_mat, 
                     nb_levels: Union[int, Iterable[int]], 
                     base_E_tilde="Pauli gen", 
@@ -277,9 +337,53 @@ def lambda_to_chi(lambda_mat,
         draw_mat(chi_mat, "\chi")
 
     return chi_mat
+
+## chi_to_kraus
+def chi_to_kraus(chi_mat, 
+                 nb_levels: Union[int, Iterable[int]], 
+                 base_E_tilde="Pauli gen", 
+                 draw_kraus = False):
     
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
     
-## Summary
+    #set the basis
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+    basis_E_tilde = basis_E_tilde_pauli(nb_levels)
+    
+    D, U = la.eigh(chi_mat)
+    U = U
+    
+    res = []
+    for i in range(len(D)):
+        if np.abs(D[i]) > 10**(-9): #we discard null eigenvalues
+            res.append(qtp.Qobj(np.zeros((d,d)), dims = [nb_levels, nb_levels]))
+            for j in range(len(basis_E_tilde)):
+                    res[-1]+= np.sqrt(D[i])* U[j,i] * basis_E_tilde[j]
+                    
+    
+    if draw_kraus:
+        if len(res) == 1:
+            draw_mat(res[0].full(), "E^0")
+        else :
+            draw_mat_mult([op.full() for op in res],
+                          ["E^{"+str(i)+"}" for i in range(len(res))])
+                   
+    return res
+            
+            
+##kraus_to_chi (for verifications mainly)
+def kraus_to_chi(kraus_list, 
+                 nb_levels: Union[int, Iterable[int]],
+                 base_rho="nm", 
+                 base_E_tilde="Pauli gen", 
+                 draw_chi = False):
+    
+    return fct_to_chi(gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
+    
+## Summary fct_to_chi
 def fct_to_chi(fct, 
                 nb_levels: Union[int, Iterable[int]],
                 base_rho="nm", 
@@ -296,7 +400,29 @@ def fct_to_chi(fct,
                     base_E_tilde=base_E_tilde, draw_chi=draw_chi)
 
     return chi_mat
-  
+
+## Summary fct_to_kraus
+def fct_to_kraus(fct, 
+                nb_levels: Union[int, Iterable[int]], 
+                base_rho="nm", 
+                base_E_tilde="Pauli gen", 
+                draw_lambda = False, 
+                draw_chi = False,
+                draw_kraus = False,
+                **kwargs):
+                    
+                    
+    lambda_mat = fct_to_lambda(fct, nb_levels, 
+                    base_rho=base_rho, draw_lambda=draw_lambda, **kwargs)
+    
+    chi_mat = lambda_to_chi(lambda_mat, nb_levels,
+                    base_E_tilde=base_E_tilde, draw_chi=draw_chi)
+    
+    kraus_list = chi_to_kraus(chi_mat, nb_levels, 
+                    base_E_tilde=base_E_tilde, draw_kraus=draw_kraus)
+
+    return kraus_list
+
 ### tests
 
 def fct_test(x, **kwargs):
