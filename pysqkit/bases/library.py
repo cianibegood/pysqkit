@@ -34,7 +34,4 @@ def fock_basis(dim_hilbert: int):
     if not isinstance(dim_hilbert, int) or dim_hilbert <= 0:
         raise ValueError("Hilbert dimensionality must be a positive integer")
 
-    if not isinstance(dim_hilbert, int):
-        raise ValueError("The effect oscillator length must be a float value")
-
     return FockBasis(dim_hilbert)

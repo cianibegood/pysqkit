@@ -22,9 +22,7 @@ class OperatorBasis(ABC):
         self._sys_dims = None
 
     def __copy__(self):
-        basis_copy = self.__class__(
-            self._dim_hilbert
-        )
+        basis_copy = self.__class__(self._dim_hilbert)
 
         basis_copy._transformation = self._transformation
         basis_copy._trunc_dim = self._trunc_dim
@@ -55,7 +53,8 @@ class OperatorBasis(ABC):
             if new_dim <= self._trunc_dim:
                 raise ValueError(
                     "The new Hilbert dimensionality must be greater than the"
-                    "truncated dimension {}".format(self._trunc_dim))
+                    "truncated dimension {}".format(self._trunc_dim)
+                )
         self._dim_hilbert = new_dim
 
     @property
@@ -82,23 +81,26 @@ class OperatorBasis(ABC):
         if self.is_truncated:
             op_dim = op.shape[0]
             if op.shape != (op_dim, op_dim):
-                "The operator must be a square 2D matrix, "
-                "instead got shape {}".format(
-                    op.shape)
+                raise ValueError(
+                    "The operator must be a square 2D matrix, "
+                    "instead got shape {}".format(op.shape)
+                )
             if op_dim < self._trunc_dim:
                 raise ValueError(
-                    "Operator dimensions are smaller than "
-                    " the truncated dimension")
-            return op[:self._trunc_dim, :self._trunc_dim]
+                    "Operator dimensions are smaller than " " the truncated dimension"
+                )
+            return op[: self._trunc_dim, : self._trunc_dim]
         return op
 
     def transform_op(self, op: np.ndarray) -> np.ndarray:
         if self.is_transformed:
             op_dim = op.shape[0]
             if op.shape != (op_dim, op_dim) or op_dim != self._dim_hilbert:
-                raise ValueError("Operator expected as a 2D square matrix "
-                                 "with the same dimensionality as the basis, "
-                                 "instead got {}".format(op.shape))
+                raise ValueError(
+                    "Operator expected as a 2D square matrix "
+                    "with the same dimensionality as the basis, "
+                    "instead got {}".format(op.shape)
+                )
             return transform_basis(op, self._transformation)
         return op
 
@@ -121,12 +123,15 @@ class OperatorBasis(ABC):
         if subsys_ind < 0 or subsys_ind > len(sys_dims):
             raise ValueError(
                 "Subsystem index must be an integer between 0 and the"
-                "total number of subsystem {}".format(len(sys_dims)))
+                "total number of subsystem {}".format(len(sys_dims))
+            )
 
         if sys_dims[subsys_ind] != self.truncated_dim:
-            raise ValueError("Mismatch between basis dimension and the "
-                             "specified system dimensions"
-                             " (given the provided index).")
+            raise ValueError(
+                "Mismatch between basis dimension and the "
+                "specified system dimensions"
+                " (given the provided index)."
+            )
 
         self._subsys_ind = subsys_ind
         self._sys_dims = sys_dims
@@ -134,11 +139,13 @@ class OperatorBasis(ABC):
     def truncate(self, dim: int) -> None:
         if not isinstance(dim, int) or dim <= 0:
             raise ValueError(
-                "The truncated dimension provided must be an integer greater than 0")
+                "The truncated dimension provided must be an integer greater than 0"
+            )
 
         if dim > self._dim_hilbert:
             raise ValueError(
-                "The truncated dimension must be smaller than the hilbert dimension of the basis")
+                "The truncated dimension must be smaller than the hilbert dimension of the basis"
+            )
 
         self._trunc_dim = dim
 
@@ -146,9 +153,7 @@ class OperatorBasis(ABC):
         if not isinstance(transform_mat, np.ndarray):
             raise ValueError(
                 "The transformation matrix should be provided as"
-                "a np.ndarry object, got {} instead".format(
-                    type(transform_mat)
-                )
+                "a np.ndarry object, got {} instead".format(type(transform_mat))
             )
 
         dim = transform_mat.shape[0]
@@ -157,9 +162,7 @@ class OperatorBasis(ABC):
             raise ValueError(
                 "The transformaton matrix should be a 2D square matrix, "
                 "with the same dimensionality as the basis, "
-                "instead got a {} dimensional matrix".format(
-                    len(transform_mat.shape)
-                )
+                "instead got a {} dimensional matrix".format(len(transform_mat.shape))
             )
 
         self._transformation = transform_mat
