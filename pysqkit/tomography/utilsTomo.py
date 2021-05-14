@@ -576,33 +576,33 @@ def lambda_to_chi_beta(lambda_mat,
     
     
 ### Tests
-mult = 2
-lvl_each = 2
-U_mult = qtp.Qobj(2*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5) + \
-                2j*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5), 
-                   dims = [[lvl_each]*mult, [lvl_each]*mult]).unit() #qtp.qeye([2]*mult)
-                   
-                   
-U = U_mult
-nb_levels = [lvl_each, lvl_each]
-
-
-param_test = {#maybe these could be proper arguments instead of dict
-    'U' : U
-}
-
-
-deb = time.time()
-lambda_mat = fct_to_lambda(_gate_from_U, nb_levels, draw_lambda = True, **param_test)
-print("Ca a pris ", time.time() - deb, "secondes")
-
-
-deb = time.time()
-chi_mat = lambda_to_chi(lambda_mat, nb_levels, draw_chi = True)
-print("Ca a pris ", time.time() - deb, "secondes")
-
-
-deb = time.time()
-chi_th_mat = lambda_to_chi_beta(lambda_mat, nb_levels, draw_chi = True)
-print("Ca a pris ", time.time() - deb, "secondes")
+# mult = 2
+# lvl_each = 2
+# U_mult = qtp.Qobj(2*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5) + \
+#                 2j*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5), 
+#                    dims = [[lvl_each]*mult, [lvl_each]*mult]).unit() #qtp.qeye([2]*mult)
+#                    
+#                    
+# U = U_mult
+# nb_levels = [lvl_each, lvl_each]
+# 
+# 
+# param_test = {#maybe these could be proper arguments instead of dict
+#     'U' : U
+# }
+# 
+# 
+# deb = time.time()
+# lambda_mat = fct_to_lambda(_gate_from_U, nb_levels, draw_lambda = True, **param_test)
+# print("Ca a pris ", time.time() - deb, "secondes")
+# 
+# 
+# deb = time.time()
+# chi_mat = lambda_to_chi(lambda_mat, nb_levels, draw_chi = True)
+# print("Ca a pris ", time.time() - deb, "secondes")
+# 
+# 
+# deb = time.time()
+# chi_th_mat = lambda_to_chi_beta(lambda_mat, nb_levels, draw_chi = True)
+# print("Ca a pris ", time.time() - deb, "secondes")
     
