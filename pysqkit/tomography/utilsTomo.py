@@ -34,14 +34,21 @@ def _n_th(maxs, n):
 
 ## Defining gates
 def _gate_from_Kraus(state_init, **kwargs):
-    ''' **kwargs should contain at least 'op_list' a list of Kraus operators '''
+    ''' **kwargs should contain at least 'op_list' a list of Kraus operators'''
     
+    op_list = kwargs['op_list']
+    
+    for op in op_list:
+        if state_init.shape != op.shape:
+            print("The dimensions don't match")
+            return None
+        
     if state_init.type == "_ket": 
         print("Initial state has been transformed into a density matrix")
-        state_init = state_initnit * state_init.dag()
+        state_init = state_init * state_init.dag()
     
     res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
-    for op in kwargs['op_list']:
+    for op in op_list:
         assert isinstance(op, qtp.Qobj)
         res+= op*state_init*op.dag()
     
@@ -49,8 +56,13 @@ def _gate_from_Kraus(state_init, **kwargs):
 
 
 def _gate_from_U(state_init, **kwargs): 
-    ''' **kwargs should contain at least 'U' the unitary operator describing the gate '''
+    '''kwargs should contain U which is a 2D numpy array'''
+
     U = kwargs['U']
+    
+    if state_init.shape[0] != U.shape[0] :
+        print("The dimensions don't match")
+        return None
     
     if state_init.type == "_ket": 
         return qtp.Qobj(U) * state_init
@@ -249,13 +261,23 @@ def _basis_E_tilde_pauli(nb_levels: Union[int, Iterable[int]]):
     
 ### Actual Tomography
 
+## get rid of dictionnaries (standardize functions)
+def rid_of_dict(fct, dict):
+    '''dict should contain all the necessary parameters for fct
+    
+    fct should make sure that the dimensions match'''
+    
+    def res(init_state):
+        return fct(init_state, **dict)
+        
+    return res
+
 ## Function to lambda
 def fct_to_lambda(fct, 
                     nb_levels: Union[int, Iterable[int]],
                     base_rho="nm", 
-                    draw_lambda = False, 
-                    **kwargs):
-    ''' 'fct' takes an initial state and kwargs and returns the output state
+                    draw_lambda = False):
+    ''' 'fct' takes an initial state and returns the output state
     
         'nb_levels' is an int or a list of the number of levels of each system'''
                     
@@ -272,7 +294,7 @@ def fct_to_lambda(fct,
     #function to calculate rho_primes
     def rho_prime(n,m):
         if n == m:
-            return fct(rho(n, m, nb_levels), **kwargs)
+            return fct(rho(n, m, nb_levels))
         else :
             n_n = rho(n, n, nb_levels)
             m_m = rho(m, m, nb_levels)
@@ -283,10 +305,10 @@ def fct_to_lambda(fct,
             minus = (_ket(n, nb_levels) +  1j*_ket(m, nb_levels)).unit()
             minus_minus = minus * minus.dag()
 
-            n_n_prime = fct(n_n, **kwargs)
-            m_m_prime = fct(m_m, **kwargs)
-            plus_plus_prime = fct(plus_plus, **kwargs)
-            minus_minus_prime = fct(minus_minus, **kwargs)
+            n_n_prime = fct(n_n)
+            m_m_prime = fct(m_m)
+            plus_plus_prime = fct(plus_plus)
+            minus_minus_prime = fct(minus_minus)
 
             return plus_plus_prime + 1j*minus_minus_prime - (1+1j)/2 * n_n_prime - (1+1j)/2 * m_m_prime
 
@@ -312,6 +334,35 @@ def fct_to_lambda(fct,
         draw_mat(lambda_mat, "\lambda")  
         
     return lambda_mat
+    
+##Function_to_PTM
+def fct_to_PTM(fct, 
+                    nb_levels: Union[int, Iterable[int]],
+                    draw_PTM = False):
+    ''' 'fct' takes an initial state and returns the output state
+    
+        'nb_levels' is an int or a list of the number of levels of each system
+        
+        fct should be able to take the operators of the pauli basis in input'''
+                    
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #set the basis
+    E_tilde_basis = _basis_E_tilde_pauli(nb_levels)
+    E_tilde_prime = [fct(E_tilde) for E_tilde in E_tilde_basis]
+    
+    PTM_mat = np.zeros((d**2, d**2))*1j
+    
+    for i in range(d**2):
+        for j in range(d**2):
+            PTM_mat[i,j] = 1/d * np.trace(E_tilde_basis[i].full().dot(E_tilde_prime[j].full()))
+            
+    if draw_PTM:
+        draw_mat(PTM_mat, "PTM") 
+        
+    return PTM_mat
     
 ## lambda_to_chi  
 def lambda_to_chi(lambda_mat, 
@@ -373,15 +424,51 @@ def chi_to_kraus(chi_mat,
                    
     return res
             
-            
-##kraus_to_chi (for verifications mainly)
-def kraus_to_chi(kraus_list, 
-                 nb_levels: Union[int, Iterable[int]],
-                 base_rho="nm", 
-                 base_E_tilde="Pauli gen", 
-                 draw_chi = False):
+## chi_to_PTM
+def chi_to_PTM(chi_mat, 
+                nb_levels: Union[int, Iterable[int]],
+                draw_PTM = False):
     
-    return fct_to_chi(_gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
+    '''chi_mat must have been calculated using the pauli_like operator base'''
+    
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #set the basis
+    basis_E_tilde = _basis_E_tilde_pauli(nb_levels)
+    
+    
+    PTM_mat = np.zeros((d**2, d**2))*1j
+    
+    for i in range(d**2):
+        for j in range(d**2):
+            for k in range(d**2):
+                for l in range(d**2):
+                    PTM_mat[i,j] += 1/d * chi_mat[k,l] * \
+                    np.trace(basis_E_tilde[i].full().dot(
+                                  basis_E_tilde[k].full()).dot(
+                                        basis_E_tilde[j].full()).dot(
+                                              basis_E_tilde[l].full())
+                              )
+                    
+                    
+    if draw_PTM:
+        draw_mat(PTM_mat, "PTM") 
+        
+    return PTM_mat
+
+
+
+## Summary Kraus_to_fct
+def kraus_to_fct(kraus_list):
+    '''returns function that only takes an init state as argument'''
+    return rid_of_dict(_gate_from_Kraus, {'op_list' : kraus_list})
+    
+## Summary U_to_fct
+def U_to_fct(U):
+    '''returns function that only takes an init state as argument'''
+    return rid_of_dict(_gate_from_U, {'U': U})
 
 ## Summary fct_to_chi
 def fct_to_chi(fct, 
@@ -400,6 +487,17 @@ def fct_to_chi(fct,
                     base_E_tilde=base_E_tilde, draw_chi=draw_chi)
 
     return chi_mat
+    
+    
+## Summary kraus_to_chi (for verifications mainly)
+def kraus_to_chi(kraus_list, 
+                 nb_levels: Union[int, Iterable[int]],
+                 base_rho="nm", 
+                 base_E_tilde="Pauli gen", 
+                 draw_chi = False):
+    
+    return fct_to_chi(_gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
+    
 
 ## Summary fct_to_kraus
 def fct_to_kraus(fct, 
