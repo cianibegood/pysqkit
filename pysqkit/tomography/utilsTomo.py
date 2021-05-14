@@ -337,6 +337,7 @@ def lambda_to_chi(lambda_mat,
 
     return chi_mat
 
+
 ## chi_to_kraus
 def chi_to_kraus(chi_mat, 
                  nb_levels: Union[int, Iterable[int]], 
@@ -381,7 +382,7 @@ def kraus_to_chi(kraus_list,
                  draw_chi = False):
     
     return fct_to_chi(_gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
-    
+
 ## Summary fct_to_chi
 def fct_to_chi(fct, 
                 nb_levels: Union[int, Iterable[int]],
@@ -421,5 +422,187 @@ def fct_to_kraus(fct,
                     base_E_tilde=base_E_tilde, draw_kraus=draw_kraus)
 
     return kraus_list
+    
+##beta (mainly to check coherence in lambda_<->_chi)
+#define beta in functionnal and matricial form
+def _beta_4D(j,k,m,n,
+           nb_levels: Union[int, Iterable[int]],
+           base_rho="nm", 
+           base_E_tilde="Pauli gen" ):
+    '''nb_levels is an int or a list of the number of levels of each system'''
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    
+    #set conventions
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+    E_tilde = _E_tilde_pauli
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+    rho_flat = _rho_nm_flat #to calculate each term
+    
+    
+    return np.trace(E_tilde(m, nb_levels).full().dot(
+                        rho_flat(j, nb_levels).full()).dot(
+                         E_tilde(n, nb_levels).dag().full()).dot(
+                              rho_flat(k, nb_levels).dag().full())
+                   )
 
+
+def _beta_2D(mu, nu, 
+           nb_levels: Union[int, Iterable[int]],
+           base_rho="nm", 
+           base_E_tilde="Pauli gen"):
+    
+    '''nb_levels is an int or a list of the number of levels of each system'''
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+
+    #translate indices
+    j,k = _n_th([d**2, d**2], mu)
+    m,n = _n_th([d**2, d**2], nu)
+    
+    return _beta_4D(j,k,m,n,
+           nb_levels,
+           base_rho, 
+           base_E_tilde)
+           
+def _beta_mat_form(nb_levels: Union[int, Iterable[int]],
+                    base_rho="nm", 
+                    base_E_tilde="Pauli gen"):
+    '''nb_levels is an int or a list of the number of levels of each system
+    
+    The beta matrix returned will be d^4 x d^4 with d the product of all terms in nb_levels'''  
+                     
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #we fix that first
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+    E_tilde = _E_tilde_pauli
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+    rho_flat = _rho_nm_flat #to calculate each term
+    
+    #build beta
+    beta_mat = np.zeros((d**4, d**4))*1j
+
+    for mu in range(d**4):
+        for nu in range(d**4):
+            beta_mat[mu, nu] = _beta_2D(mu, nu,
+                                nb_levels,
+                                base_rho, 
+                                base_E_tilde)
+                                
+    return beta_mat
+    
+    
+#define chi_to_lambda using beta
+def chi_to_lambda_beta(chi_mat, 
+                       nb_levels: Union[int, Iterable[int]],
+                       base_rho="nm",  
+                       base_E_tilde="Pauli gen", 
+                       draw_lambda = False):
+                        
+    ''' 'nb_levels' is an int or a list of the number of levels of each system'''
+                
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #we fix eventual issues here
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+        base_E_tilde  = "Pauli_gen"
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+        base_rho = "nm"
+    
+    lambda_th_mat = np.zeros((d**2,d**2))*1j
+    for j in range(d**2):
+        for k in range(d**2):
+            for m in range(d**2):
+                for n in range(d**2):
+                    lambda_th_mat[j,k] += _beta_4D(j,k,m,n, 
+                                            nb_levels, base_rho, base_E_tilde)*chi_mat[m,n]
+                    
+    if draw_lambda:
+        draw_mat(lambda_th_mat, "\lambda^{th}") 
+                    
+    return lambda_th_mat
+
+#define lambda_to_chi using beta
+def lambda_to_chi_beta(lambda_mat, 
+                       nb_levels: Union[int, Iterable[int]],
+                       base_rho="nm",  
+                       base_E_tilde="Pauli gen", 
+                       draw_chi = False):
+    ''' 'nb_levels' is an int or a list of the number of levels of each system
+    
+    We use the beta matrix which is d^4 x d^4 and we pseudo-inverse it'''
+                
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+
+    #we fix eventual issues here
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+        base_E_tilde  = "Pauli_gen"
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+        base_rho = "nm"
+
+    #Start calculations
+    beta_mat = _beta_mat_form(nb_levels, base_rho, base_E_tilde)
+    
+    lambda_vec = lambda_mat.reshape((d**4, 1))
+    
+    chi_vec = la.solve(beta_mat, lambda_vec)
+    
+    chi_th_mat = chi_vec.reshape((d**2, d**2))
+    
+    if draw_chi:
+        draw_mat(chi_th_mat, "\chi^{th}") 
+        
+    return chi_th_mat
+    
+    
+### Tests
+mult = 2
+lvl_each = 2
+U_mult = qtp.Qobj(2*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5) + \
+                2j*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5), 
+                   dims = [[lvl_each]*mult, [lvl_each]*mult]).unit() #qtp.qeye([2]*mult)
+                   
+                   
+U = U_mult
+nb_levels = [lvl_each, lvl_each]
+
+
+param_test = {#maybe these could be proper arguments instead of dict
+    'U' : U
+}
+
+
+deb = time.time()
+lambda_mat = fct_to_lambda(_gate_from_U, nb_levels, draw_lambda = True, **param_test)
+print("Ca a pris ", time.time() - deb, "secondes")
+
+
+deb = time.time()
+chi_mat = lambda_to_chi(lambda_mat, nb_levels, draw_chi = True)
+print("Ca a pris ", time.time() - deb, "secondes")
+
+
+deb = time.time()
+chi_th_mat = lambda_to_chi_beta(lambda_mat, nb_levels, draw_chi = True)
+print("Ca a pris ", time.time() - deb, "secondes")
     
