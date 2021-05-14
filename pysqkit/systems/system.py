@@ -105,7 +105,7 @@ class Qubit(ABC):
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
-    def diagonlize_basis(self, num_levels: int) -> None:
+    def diagonalize_basis(self, num_levels: int) -> None:
         if not isinstance(num_levels, int):
             raise ValueError(
                 "Number of levels must be an integer")
