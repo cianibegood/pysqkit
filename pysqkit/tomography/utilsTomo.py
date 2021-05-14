@@ -23,7 +23,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 ### General Tools
 
 ##Abstacts
-def n_th(maxs, n):  
+def _n_th(maxs, n):  
     '''returns n-th tuple with the i_th term varying between 0 and maxs[i]'''
     temp = np.zeros(len(maxs))
     for i in range(0, len(temp)):
@@ -33,31 +33,43 @@ def n_th(maxs, n):
     return res
 
 ## Defining gates
-def gate_from_Kraus(state_init, **kwargs):
-    ''' **kwargs should contain at least 'op_list' a list of Kraus operators '''
+def _gate_from_Kraus(state_init, **kwargs):
+    ''' **kwargs should contain at least 'op_list' a list of Kraus operators'''
     
-    if state_init.type == "ket": 
+    op_list = kwargs['op_list']
+    
+    for op in op_list:
+        if state_init.shape != op.shape:
+            print("The dimensions don't match")
+            return None
+        
+    if state_init.type == "_ket": 
         print("Initial state has been transformed into a density matrix")
-        state_init = state_initnit * state_init.dag()
+        state_init = state_init * state_init.dag()
     
     res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
-    for op in kwargs['op_list']:
+    for op in op_list:
         assert isinstance(op, qtp.Qobj)
         res+= op*state_init*op.dag()
     
     return res
 
 
-def gate_from_U(state_init, **kwargs): 
-    ''' **kwargs should contain at least 'U' the unitary operator describing the gate '''
+def _gate_from_U(state_init, **kwargs): 
+    '''kwargs should contain U which is a 2D numpy array'''
+
     U = kwargs['U']
     
-    if state_init.type == "ket": 
+    if state_init.shape[0] != U.shape[0] :
+        print("The dimensions don't match")
+        return None
+    
+    if state_init.type == "_ket": 
         return qtp.Qobj(U) * state_init
     elif state_init.type == "oper":
         return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
     else :
-        print("Type of state_init not recognized, must be ket or oper")
+        print("Type of state_init not recognized, must be _ket or oper")
         
     
 ## Visualisation
@@ -129,40 +141,40 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN):
 ### Tomography Preparation
 
 ##State base 
-def ket(n: int, 
+def _ket(n: int, 
         nb_levels: Union[int, Iterable[int]] ):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
-    return  qtp.fock(nb_levels, n_th(nb_levels, n))
+    return  qtp.fock(nb_levels, _n_th(nb_levels, n))
 
-def bra(m,
+def _bra(m,
         nb_levels: Union[int, Iterable[int]] ):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
-    return  qtp.fock(nb_levels, n_th(nb_levels, m)).dag()   
+    return  qtp.fock(nb_levels, _n_th(nb_levels, m)).dag()   
      
-def rho_nm(n, m,
+def _rho_nm(n, m,
            nb_levels: Union[int, Iterable[int]] ):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
-    return ket(n, nb_levels)*bra(m, nb_levels)
+    return _ket(n, nb_levels)*_bra(m, nb_levels)
 
-def rho_nm_flat(j, 
+def _rho_nm_flat(j, 
                 nb_levels: Union[int, Iterable[int]] ):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
     d = np.prod(nb_levels)
     
-    n, m = n_th([d,d], j)
+    n, m = _n_th([d,d], j)
     
-    return rho_nm(n,m, nb_levels)
+    return _rho_nm(n,m, nb_levels)
     
 
-def basis_rho_nm(nb_levels: Union[int, Iterable[int]] ):
+def _basis_rho_nm(nb_levels: Union[int, Iterable[int]] ):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
@@ -170,14 +182,14 @@ def basis_rho_nm(nb_levels: Union[int, Iterable[int]] ):
     
     res = []
     for k in range(d**2):
-        res.append(rho_nm_flat(k , nb_levels))
+        res.append(_rho_nm_flat(k , nb_levels))
 
     return res 
     
     
     
 ## Base of Operators
-def Pauli_gen(j, local_d):#operator P_j for 1 system
+def _Pauli_gen(j, local_d):#operator P_j for 1 system
     
     if j >= local_d**2:
         print("j selected too big for the local number of levels, j should be less than local_d**2")
@@ -204,7 +216,7 @@ def Pauli_gen(j, local_d):#operator P_j for 1 system
 
         elif a1<(local_d-1):
             res = np.zeros((local_d, local_d))*0j
-            h_k_lvl_inf = Pauli_gen(a1*(local_d-1) + a2, local_d-1)  #we take one at same coordinates in lower level basis
+            h_k_lvl_inf = _Pauli_gen(a1*(local_d-1) + a2, local_d-1)  #we take one at same coordinates in lower level basis
             res[:-1, :-1] = h_k_lvl_inf.full()
             return qtp.Qobj(res)
 
@@ -216,7 +228,7 @@ def Pauli_gen(j, local_d):#operator P_j for 1 system
             return qtp.Qobj(res)
         
     
-def E_tilde_pauli(i, nb_levels: Union[int, Iterable[int]]):
+def _E_tilde_pauli(i, nb_levels: Union[int, Iterable[int]]):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
@@ -225,16 +237,16 @@ def E_tilde_pauli(i, nb_levels: Union[int, Iterable[int]]):
     
     pauli_maxs = [int(max_lvl**2) for max_lvl in nb_levels]
     
-    tpl = n_th(pauli_maxs, i) #tuple of indices of the P_i that will appear in the product defining E_tilde 
+    tpl = _n_th(pauli_maxs, i) #tuple of indices of the P_i that will appear in the product defining E_tilde 
                               #(as in sigma_i x sigma_j x sigma_k)
-                              #For L levels, there are L^2 pauli_gen matrices
+                              #For L levels, there are L^2 _Pauli_gen matrices
     for j in range(len(tpl)):
         ind = tpl[j]
-        pauli_list.append(Pauli_gen(ind, nb_levels[j]))
+        pauli_list.append(_Pauli_gen(ind, nb_levels[j]))
         
     return qtp.tensor(pauli_list)
                            
-def basis_E_tilde_pauli(nb_levels: Union[int, Iterable[int]]):
+def _basis_E_tilde_pauli(nb_levels: Union[int, Iterable[int]]):
     '''nb_levels is an int or a list of the number of levels of each system'''
     if isinstance(nb_levels, int):
         nb_levels = [nb_levels]
@@ -242,20 +254,30 @@ def basis_E_tilde_pauli(nb_levels: Union[int, Iterable[int]]):
     
     res = []
     for i in range(d**2):
-        res.append(E_tilde_pauli(i , nb_levels))
+        res.append(_E_tilde_pauli(i , nb_levels))
 
     return res
     
     
 ### Actual Tomography
 
+## get rid of dictionnaries (standardize functions)
+def rid_of_dict(fct, dict):
+    '''dict should contain all the necessary parameters for fct
+    
+    fct should make sure that the dimensions match'''
+    
+    def res(init_state):
+        return fct(init_state, **dict)
+        
+    return res
+
 ## Function to lambda
 def fct_to_lambda(fct, 
                     nb_levels: Union[int, Iterable[int]],
                     base_rho="nm", 
-                    draw_lambda = False, 
-                    **kwargs):
-    ''' 'fct' takes an initial state and kwargs and returns the output state
+                    draw_lambda = False):
+    ''' 'fct' takes an initial state and returns the output state
     
         'nb_levels' is an int or a list of the number of levels of each system'''
                     
@@ -266,28 +288,27 @@ def fct_to_lambda(fct,
     #set the basis
     if base_rho != "nm":
         print("This base_rho is non treated, instead took default basis of |n><m|")
-    rho = rho_nm #functions to calculate each term
-    rho_flat = rho_nm_flat
+    rho = _rho_nm #functions to calculate each term
             
             
     #function to calculate rho_primes
     def rho_prime(n,m):
         if n == m:
-            return fct(rho(n, m, nb_levels), **kwargs)
+            return fct(rho(n, m, nb_levels))
         else :
             n_n = rho(n, n, nb_levels)
             m_m = rho(m, m, nb_levels)
             
-            plus = (ket(n, nb_levels) + ket(m, nb_levels)).unit()
+            plus = (_ket(n, nb_levels) + _ket(m, nb_levels)).unit()
             plus_plus = plus * plus.dag()
             
-            minus = (ket(n, nb_levels) +  1j*ket(m, nb_levels)).unit()
+            minus = (_ket(n, nb_levels) +  1j*_ket(m, nb_levels)).unit()
             minus_minus = minus * minus.dag()
 
-            n_n_prime = fct(n_n, **kwargs)
-            m_m_prime = fct(m_m, **kwargs)
-            plus_plus_prime = fct(plus_plus, **kwargs)
-            minus_minus_prime = fct(minus_minus, **kwargs)
+            n_n_prime = fct(n_n)
+            m_m_prime = fct(m_m)
+            plus_plus_prime = fct(plus_plus)
+            minus_minus_prime = fct(minus_minus)
 
             return plus_plus_prime + 1j*minus_minus_prime - (1+1j)/2 * n_n_prime - (1+1j)/2 * m_m_prime
 
@@ -297,13 +318,13 @@ def fct_to_lambda(fct,
 
     #filling
     for i in range(d**2):
-        n_i, m_i = n_th([d,d], i)
+        n_i, m_i = _n_th([d,d], i)
         
         rho_prime_i = rho_prime(n_i, m_i)
             
             
         for j in range(d**2):
-            n_j, m_j = n_th([d,d], j)
+            n_j, m_j = _n_th([d,d], j)
             
             lambda_mat[i,j] = np.trace(rho_prime_i.full().dot(
                                              rho(n_j, m_j, nb_levels).dag().full())  
@@ -313,6 +334,35 @@ def fct_to_lambda(fct,
         draw_mat(lambda_mat, "\lambda")  
         
     return lambda_mat
+    
+##Function_to_PTM
+def fct_to_PTM(fct, 
+                    nb_levels: Union[int, Iterable[int]],
+                    draw_PTM = False):
+    ''' 'fct' takes an initial state and returns the output state
+    
+        'nb_levels' is an int or a list of the number of levels of each system
+        
+        fct should be able to take the operators of the pauli basis in input'''
+                    
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #set the basis
+    E_tilde_basis = _basis_E_tilde_pauli(nb_levels)
+    E_tilde_prime = [fct(E_tilde) for E_tilde in E_tilde_basis]
+    
+    PTM_mat = np.zeros((d**2, d**2))*1j
+    
+    for i in range(d**2):
+        for j in range(d**2):
+            PTM_mat[i,j] = 1/d * np.trace(E_tilde_basis[i].full().dot(E_tilde_prime[j].full()))
+            
+    if draw_PTM:
+        draw_mat(PTM_mat, "PTM") 
+        
+    return PTM_mat
     
 ## lambda_to_chi  
 def lambda_to_chi(lambda_mat, 
@@ -328,7 +378,7 @@ def lambda_to_chi(lambda_mat,
     #set the basis
     if base_E_tilde != "Pauli gen":
         print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
-    basis_E_tilde = basis_E_tilde_pauli(nb_levels)
+    basis_E_tilde = _basis_E_tilde_pauli(nb_levels)
     
     lambda_qobj = qtp.Qobj(lambda_mat)
     chi_mat = qtp.qpt(lambda_qobj, [basis_E_tilde])
@@ -337,6 +387,7 @@ def lambda_to_chi(lambda_mat,
         draw_mat(chi_mat, "\chi")
 
     return chi_mat
+
 
 ## chi_to_kraus
 def chi_to_kraus(chi_mat, 
@@ -351,7 +402,7 @@ def chi_to_kraus(chi_mat,
     #set the basis
     if base_E_tilde != "Pauli gen":
         print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
-    basis_E_tilde = basis_E_tilde_pauli(nb_levels)
+    basis_E_tilde = _basis_E_tilde_pauli(nb_levels)
     
     D, U = la.eigh(chi_mat)
     U = U
@@ -373,16 +424,52 @@ def chi_to_kraus(chi_mat,
                    
     return res
             
-            
-##kraus_to_chi (for verifications mainly)
-def kraus_to_chi(kraus_list, 
-                 nb_levels: Union[int, Iterable[int]],
-                 base_rho="nm", 
-                 base_E_tilde="Pauli gen", 
-                 draw_chi = False):
+## chi_to_PTM
+def chi_to_PTM(chi_mat, 
+                nb_levels: Union[int, Iterable[int]],
+                draw_PTM = False):
     
-    return fct_to_chi(gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
+    '''chi_mat must have been calculated using the pauli_like operator base'''
     
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #set the basis
+    basis_E_tilde = _basis_E_tilde_pauli(nb_levels)
+    
+    
+    PTM_mat = np.zeros((d**2, d**2))*1j
+    
+    for i in range(d**2):
+        for j in range(d**2):
+            for k in range(d**2):
+                for l in range(d**2):
+                    PTM_mat[i,j] += 1/d * chi_mat[k,l] * \
+                    np.trace(basis_E_tilde[i].full().dot(
+                                  basis_E_tilde[k].full()).dot(
+                                        basis_E_tilde[j].full()).dot(
+                                              basis_E_tilde[l].full())
+                              )
+                    
+                    
+    if draw_PTM:
+        draw_mat(PTM_mat, "PTM") 
+        
+    return PTM_mat
+
+
+
+## Summary Kraus_to_fct
+def kraus_to_fct(kraus_list):
+    '''returns function that only takes an init state as argument'''
+    return rid_of_dict(_gate_from_Kraus, {'op_list' : kraus_list})
+    
+## Summary U_to_fct
+def U_to_fct(U):
+    '''returns function that only takes an init state as argument'''
+    return rid_of_dict(_gate_from_U, {'U': U})
+
 ## Summary fct_to_chi
 def fct_to_chi(fct, 
                 nb_levels: Union[int, Iterable[int]],
@@ -400,6 +487,17 @@ def fct_to_chi(fct,
                     base_E_tilde=base_E_tilde, draw_chi=draw_chi)
 
     return chi_mat
+    
+    
+## Summary kraus_to_chi (for verifications mainly)
+def kraus_to_chi(kraus_list, 
+                 nb_levels: Union[int, Iterable[int]],
+                 base_rho="nm", 
+                 base_E_tilde="Pauli gen", 
+                 draw_chi = False):
+    
+    return fct_to_chi(_gate_from_Kraus, nb_levels = nb_levels, draw_chi = draw_chi, **{'op_list' : kraus_list})
+    
 
 ## Summary fct_to_kraus
 def fct_to_kraus(fct, 
@@ -422,8 +520,187 @@ def fct_to_kraus(fct,
                     base_E_tilde=base_E_tilde, draw_kraus=draw_kraus)
 
     return kraus_list
+    
+##beta (mainly to check coherence in lambda_<->_chi)
+#define beta in functionnal and matricial form
+def _beta_4D(j,k,m,n,
+           nb_levels: Union[int, Iterable[int]],
+           base_rho="nm", 
+           base_E_tilde="Pauli gen" ):
+    '''nb_levels is an int or a list of the number of levels of each system'''
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    
+    #set conventions
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+    E_tilde = _E_tilde_pauli
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+    rho_flat = _rho_nm_flat #to calculate each term
+    
+    
+    return np.trace(E_tilde(m, nb_levels).full().dot(
+                        rho_flat(j, nb_levels).full()).dot(
+                         E_tilde(n, nb_levels).dag().full()).dot(
+                              rho_flat(k, nb_levels).dag().full())
+                   )
 
-### tests
 
-def fct_test(x, **kwargs):
-    return x
+def _beta_2D(mu, nu, 
+           nb_levels: Union[int, Iterable[int]],
+           base_rho="nm", 
+           base_E_tilde="Pauli gen"):
+    
+    '''nb_levels is an int or a list of the number of levels of each system'''
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+
+    #translate indices
+    j,k = _n_th([d**2, d**2], mu)
+    m,n = _n_th([d**2, d**2], nu)
+    
+    return _beta_4D(j,k,m,n,
+           nb_levels,
+           base_rho, 
+           base_E_tilde)
+           
+def _beta_mat_form(nb_levels: Union[int, Iterable[int]],
+                    base_rho="nm", 
+                    base_E_tilde="Pauli gen"):
+    '''nb_levels is an int or a list of the number of levels of each system
+    
+    The beta matrix returned will be d^4 x d^4 with d the product of all terms in nb_levels'''  
+                     
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #we fix that first
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+    E_tilde = _E_tilde_pauli
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+    rho_flat = _rho_nm_flat #to calculate each term
+    
+    #build beta
+    beta_mat = np.zeros((d**4, d**4))*1j
+
+    for mu in range(d**4):
+        for nu in range(d**4):
+            beta_mat[mu, nu] = _beta_2D(mu, nu,
+                                nb_levels,
+                                base_rho, 
+                                base_E_tilde)
+                                
+    return beta_mat
+    
+    
+#define chi_to_lambda using beta
+def chi_to_lambda_beta(chi_mat, 
+                       nb_levels: Union[int, Iterable[int]],
+                       base_rho="nm",  
+                       base_E_tilde="Pauli gen", 
+                       draw_lambda = False):
+                        
+    ''' 'nb_levels' is an int or a list of the number of levels of each system'''
+                
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+    
+    #we fix eventual issues here
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+        base_E_tilde  = "Pauli_gen"
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+        base_rho = "nm"
+    
+    lambda_th_mat = np.zeros((d**2,d**2))*1j
+    for j in range(d**2):
+        for k in range(d**2):
+            for m in range(d**2):
+                for n in range(d**2):
+                    lambda_th_mat[j,k] += _beta_4D(j,k,m,n, 
+                                            nb_levels, base_rho, base_E_tilde)*chi_mat[m,n]
+                    
+    if draw_lambda:
+        draw_mat(lambda_th_mat, "\lambda^{th}") 
+                    
+    return lambda_th_mat
+
+#define lambda_to_chi using beta
+def lambda_to_chi_beta(lambda_mat, 
+                       nb_levels: Union[int, Iterable[int]],
+                       base_rho="nm",  
+                       base_E_tilde="Pauli gen", 
+                       draw_chi = False):
+    ''' 'nb_levels' is an int or a list of the number of levels of each system
+    
+    We use the beta matrix which is d^4 x d^4 and we pseudo-inverse it'''
+                
+    if isinstance(nb_levels, int):
+        nb_levels = [nb_levels]
+    d = np.prod(nb_levels)
+
+    #we fix eventual issues here
+    if base_E_tilde != "Pauli gen":
+        print("This base_E_tilde is non treated, instead took default basis of Pauli-like operators")
+        base_E_tilde  = "Pauli_gen"
+    
+    if base_rho != "nm":
+        print("This base_rho is non treated, instead took default basis of |n><m|")
+        base_rho = "nm"
+
+    #Start calculations
+    beta_mat = _beta_mat_form(nb_levels, base_rho, base_E_tilde)
+    
+    lambda_vec = lambda_mat.reshape((d**4, 1))
+    
+    chi_vec = la.solve(beta_mat, lambda_vec)
+    
+    chi_th_mat = chi_vec.reshape((d**2, d**2))
+    
+    if draw_chi:
+        draw_mat(chi_th_mat, "\chi^{th}") 
+        
+    return chi_th_mat
+    
+    
+### Tests
+# mult = 2
+# lvl_each = 2
+# U_mult = qtp.Qobj(2*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5) + \
+#                 2j*(np.random.rand(lvl_each**mult, lvl_each**mult)-.5), 
+#                    dims = [[lvl_each]*mult, [lvl_each]*mult]).unit() #qtp.qeye([2]*mult)
+#                    
+#                    
+# U = U_mult
+# nb_levels = [lvl_each, lvl_each]
+# 
+# 
+# param_test = {#maybe these could be proper arguments instead of dict
+#     'U' : U
+# }
+# 
+# 
+# deb = time.time()
+# lambda_mat = fct_to_lambda(_gate_from_U, nb_levels, draw_lambda = True, **param_test)
+# print("Ca a pris ", time.time() - deb, "secondes")
+# 
+# 
+# deb = time.time()
+# chi_mat = lambda_to_chi(lambda_mat, nb_levels, draw_chi = True)
+# print("Ca a pris ", time.time() - deb, "secondes")
+# 
+# 
+# deb = time.time()
+# chi_th_mat = lambda_to_chi_beta(lambda_mat, nb_levels, draw_chi = True)
+# print("Ca a pris ", time.time() - deb, "secondes")
+    
