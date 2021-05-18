@@ -2,22 +2,17 @@ from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
 import os
 import sys
 
-from pathlib import Path#not necessary ?
-parent_path = ".."  #str(Path(__file__).resolve().parents[1])
-sys.path.append(parent_path)
-
 import time
 import datetime
 
 import qutip as qtp 
 import numpy as np 
 import matplotlib.pyplot as plt
-from scipy import linalg as la #not necessary ?
+from scipy import linalg as la
 
-import pysqkit #not necessary ?
+# import pysqkit
+# from pysqkit.solvers.solvkit import integrate
 
-
-from pysqkit.solvers.solvkit import integrate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ### General Tools
@@ -685,22 +680,22 @@ def lambda_to_chi_beta(lambda_mat,
 # nb_levels = [lvl_each, lvl_each]
 # 
 # 
-# param_test = {#maybe these could be proper arguments instead of dict
+# param_test = {
 #     'U' : U
 # }
 # 
 # 
 # deb = time.time()
 # lambda_mat = fct_to_lambda(_gate_from_U, nb_levels, draw_lambda = True, **param_test)
-# print("Ca a pris ", time.time() - deb, "secondes")
+# print("It took ", time.time() - deb, "seconds")
 # 
 # 
 # deb = time.time()
 # chi_mat = lambda_to_chi(lambda_mat, nb_levels, draw_chi = True)
-# print("Ca a pris ", time.time() - deb, "secondes")
+# print("It took ", time.time() - deb, "seconds")
 # 
 # 
 # deb = time.time()
 # chi_th_mat = lambda_to_chi_beta(lambda_mat, nb_levels, draw_chi = True)
-# print("Ca a pris ", time.time() - deb, "secondes")
+# print("It took ", time.time() - deb, "seconds")
     
