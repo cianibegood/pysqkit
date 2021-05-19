@@ -136,6 +136,10 @@ class OperatorBasis(ABC):
         self._subsys_ind = subsys_ind
         self._sys_dims = sys_dims
 
+    def unembed(self) -> None:
+        self._subsys_ind = None
+        self._sys_dims = None
+
     def truncate(self, dim: int) -> None:
         if not isinstance(dim, int) or dim <= 0:
             raise ValueError(
