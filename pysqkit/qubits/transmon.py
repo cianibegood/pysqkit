@@ -179,12 +179,20 @@ class SimpleTransmon(Qubit):
         self._anharm = anharm
         self._flux = flux
 
+        self._ec, self._ej = self._get_energies()
+
         if basis is None:
             basis = fock_basis(dim_hilbert)
         else:
             if not isinstance(basis, _supported_bases):
                 raise NotImplementedError("Basis not supported yet")
         super().__init__(label=label, basis=basis)
+
+    def _get_energies(self):
+        charge_energy = -self._anharm
+        _freq = self._freq - self._anharm
+        joseph_energy = (_freq / np.sqrt(8 * charge_energy)) ** 2
+        return charge_energy, joseph_energy
 
     def __copy__(self) -> "SimpleTransmon":
         qubit_copy = self.__class__(
@@ -203,6 +211,7 @@ class SimpleTransmon(Qubit):
     @freq.setter
     def freq(self, freq_val: float) -> None:
         self._freq = freq_val
+        self._ec, self._ej = self._get_energies()
 
     @property
     def anharm(self) -> float:
@@ -211,6 +220,7 @@ class SimpleTransmon(Qubit):
     @anharm.setter
     def anharm(self, anharm_val: float) -> None:
         self._anharm = anharm_val
+        self._ec, self._ej = self._get_energies()
 
     @property
     def flux(self) -> float:
@@ -219,6 +229,63 @@ class SimpleTransmon(Qubit):
     @flux.setter
     def flux(self, flux: float) -> None:
         self._flux = flux
+
+    @property
+    def res_freq(self) -> float:
+        return np.sqrt(8 * self._ec * self._ej)
+
+    @property
+    def flux_zpf(self) -> float:
+        return (2 * self._ec / self._ej) ** 0.25
+
+    @property
+    def charge_zpf(self) -> float:
+        return (self._ej / (32 * self._ec)) ** 0.25
+
+    def _get_charge_op(self):
+        charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
+
+        return charge_op
+
+    def charge_op(
+        self,
+        *,
+        as_qobj=False,
+    ) -> np.ndarray:
+        charge_op = self.basis.finalize_op(self._get_charge_op())
+
+        if as_qobj:
+            dim = self.basis.sys_truncated_dims
+
+            qobj_op = Qobj(
+                inpt=charge_op,
+                dims=[dim, dim],
+                shape=charge_op.shape,
+                type="oper",
+                isherm=True,
+            )
+            return qobj_op
+        return charge_op
+
+    def _get_flux_op(self):
+        flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
+        return flux_op
+
+    def flux_op(self, *, as_qobj=False) -> np.ndarray:
+        flux_op = self.basis.finalize_op(self._get_flux_op())
+
+        if as_qobj:
+            dim = self.basis.sys_truncated_dims
+
+            qobj_op = Qobj(
+                inpt=flux_op,
+                dims=[dim, dim],
+                shape=flux_op.shape,
+                type="oper",
+                isherm=True,
+            )
+            return qobj_op
+        return flux_op
 
     @property
     def _qubit_attrs(self) -> dict:
