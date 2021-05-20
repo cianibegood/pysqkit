@@ -174,16 +174,14 @@ class SimpleTransmon(Qubit):
         label: str,
         freq: float,
         anharm: float,
-        flux: float,
+        ext_flux: Optional[float] = 0,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
         self._freq = freq
         self._anharm = anharm
-        self._flux = flux
-
-        self._ec, self._ej = self._get_energies()
+        self._ext_flux = ext_flux
 
         if basis is None:
             basis = fock_basis(dim_hilbert)
@@ -191,12 +189,6 @@ class SimpleTransmon(Qubit):
             if not isinstance(basis, _supported_bases):
                 raise NotImplementedError("Basis not supported yet")
         super().__init__(label=label, basis=basis)
-
-    def _get_energies(self):
-        charge_energy = -self._anharm
-        _freq = self._freq - self._anharm
-        joseph_energy = (_freq / np.sqrt(8 * charge_energy)) ** 2
-        return charge_energy, joseph_energy
 
     def __copy__(self) -> "SimpleTransmon":
         qubit_copy = self.__class__(
@@ -210,12 +202,13 @@ class SimpleTransmon(Qubit):
 
     @property
     def freq(self) -> float:
-        return self._freq
+        res_freq = self._freq - self._anharm
+        shifted_freq = res_freq * np.sqrt(np.abs(np.cos(pi * self._ext_flux)))
+        return shifted_freq + self._anharm
 
     @freq.setter
     def freq(self, freq_val: float) -> None:
         self._freq = freq_val
-        self._ec, self._ej = self._get_energies()
 
     @property
     def anharm(self) -> float:
@@ -224,27 +217,36 @@ class SimpleTransmon(Qubit):
     @anharm.setter
     def anharm(self, anharm_val: float) -> None:
         self._anharm = anharm_val
-        self._ec, self._ej = self._get_energies()
 
     @property
-    def flux(self) -> float:
-        return self._flux
+    def ext_flux(self) -> float:
+        return self._ext_flux
 
-    @flux.setter
-    def flux(self, flux: float) -> None:
-        self._flux = flux
+    @ext_flux.setter
+    def ext_flux(self, flux: float) -> None:
+        self._ext_flux = flux
+
+    @property
+    def charge_energy(self) -> float:
+        return -self._anharm
+
+    @property
+    def joseph_energy(self) -> float:
+        res_freq = self._freq - self._anharm
+        joseph_energy = (res_freq / np.sqrt(8 * self.charge_energy)) ** 2
+        return joseph_energy
 
     @property
     def res_freq(self) -> float:
-        return np.sqrt(8 * self._ec * self._ej)
+        return np.sqrt(8 * self.charge_energy * self.joseph_energy)
 
     @property
     def flux_zpf(self) -> float:
-        return (2 * self._ec / self._ej) ** 0.25
+        return (2 * self.charge_energy / self.joseph_energy) ** 0.25
 
     @property
     def charge_zpf(self) -> float:
-        return (self._ej / (32 * self._ec)) ** 0.25
+        return (self.joseph_energy / (32 * self.charge_energy)) ** 0.25
 
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
@@ -329,5 +331,5 @@ class SimpleTransmon(Qubit):
         return hamil
 
     def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        pot = -self._ej * np.cos(flux)
+        pot = -self.joseph_energy * np.cos(flux)
         return pot
