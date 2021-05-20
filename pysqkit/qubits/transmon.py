@@ -1,5 +1,6 @@
 from typing import Optional, Union, List
 from copy import copy
+from warnings import warn
 
 import numpy as np
 from scipy import linalg as la
@@ -185,7 +186,16 @@ class SimpleTransmon(Qubit):
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
+        if max_freq <= 0:
+            raise ValueError("Frequency expected to be positive value greater than 0.")
         self._freq = max_freq
+
+        if anharm > 0:
+            warn(
+                "anharm expected to be negative. "
+                "Setting as {} instead.".format(-anharm)
+            )
+            anharm = -anharm
         self._anharm = anharm
         self._ext_flux = ext_flux
 
@@ -244,7 +254,8 @@ class SimpleTransmon(Qubit):
     def joseph_energy(self) -> float:
         res_freq = self._freq - self._anharm
         joseph_energy = (res_freq / np.sqrt(8 * self.charge_energy)) ** 2
-        return joseph_energy
+        det_joseph_energy = joseph_energy * np.abs(np.cos(pi * self.ext_flux))
+        return det_joseph_energy
 
     @property
     def res_freq(self) -> float:
