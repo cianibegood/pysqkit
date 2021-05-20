@@ -178,14 +178,14 @@ class SimpleTransmon(Qubit):
     def __init__(
         self,
         label: str,
-        freq: float,
+        max_freq: float,
         anharm: float,
         ext_flux: Optional[float] = 0,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
-        self._freq = freq
+        self._freq = max_freq
         self._anharm = anharm
         self._ext_flux = ext_flux
 
@@ -212,8 +212,12 @@ class SimpleTransmon(Qubit):
         shifted_freq = res_freq * np.sqrt(np.abs(np.cos(pi * self._ext_flux)))
         return shifted_freq + self._anharm
 
-    @freq.setter
-    def freq(self, freq_val: float) -> None:
+    @property
+    def max_freq(self) -> float:
+        return self._freq
+
+    @max_freq.setter
+    def max_freq(self, freq_val: float) -> None:
         self._freq = freq_val
 
     @property
