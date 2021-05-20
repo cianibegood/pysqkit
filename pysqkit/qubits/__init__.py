@@ -1,5 +1,5 @@
 from .fluxonium import Fluxonium
-from .transmon import SimpleTransmon
+from .transmon import SimpleTransmon, Transmon
 
 
-__all__ = ['Fluxonium', 'SimpleTransmon']
+__all__ = ["Fluxonium", "Transmon", "SimpleTransmon"]
