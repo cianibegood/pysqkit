@@ -315,19 +315,15 @@ class SimpleTransmon(Qubit):
     def _get_hamiltonian(
         self,
     ) -> np.ndarray:
-        if isinstance(self.basis, FockBasis):
-            osc_hamil = self.freq * self.basis.num_op
+        osc_hamil = self.freq * self.basis.num_op
 
-            low_op = self.basis.low_op
-            raise_op = self.basis.raise_op
+        low_op = self.basis.low_op
+        raise_op = self.basis.raise_op
 
-            anharm_term = 0.5 * self.anharm * (raise_op * raise_op * low_op * low_op)
+        anharm_op = raise_op @ raise_op @ low_op @ low_op
 
-            hamil = osc_hamil + anharm_term
-        else:
-            raise NotImplementedError
-
-        return hamil.real
+        hamil = osc_hamil + 0.5 * self.anharm * anharm_op
+        return hamil
 
     def hamiltonian(self, *, as_qobj=False) -> np.ndarray:
         hamil = self.basis.finalize_op(self._get_hamiltonian())
