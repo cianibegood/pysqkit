@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from copy import copy
 
 import numpy as np
@@ -163,6 +163,10 @@ class Transmon(Qubit):
             return qobj_op
         return hamil
 
+    def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        pot = -self._ej * np.cos(flux)
+        return pot
+
 
 class SimpleTransmon(Qubit):
     def __init__(
@@ -323,3 +327,7 @@ class SimpleTransmon(Qubit):
             )
             return qobj_op
         return hamil
+
+    def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        pot = -self._ej * np.cos(flux)
+        return pot
