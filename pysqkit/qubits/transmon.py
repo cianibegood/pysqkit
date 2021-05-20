@@ -347,12 +347,12 @@ class SimpleTransmon(Qubit):
             return qobj_op
         return hamil
 
-    def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        pot = -self.joseph_energy * np.cos(flux)
+    def potential(self, phase: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        pot = -self.joseph_energy * np.cos(phase)
         return pot
 
     def wave_function(self) -> np.ndarray:
-        raise NotADirectoryError
+        raise NotImplementedError
 
     def dielectric_loss(self) -> List[np.ndarray]:
         raise NotImplementedError
