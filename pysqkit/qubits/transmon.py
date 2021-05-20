@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, List
 from copy import copy
 
 import numpy as np
@@ -167,6 +167,12 @@ class Transmon(Qubit):
         pot = -self._ej * np.cos(flux)
         return pot
 
+    def wave_function(self) -> np.ndarray:
+        raise NotADirectoryError
+
+    def dielectric_loss(self) -> List[np.ndarray]:
+        raise NotImplementedError
+
 
 class SimpleTransmon(Qubit):
     def __init__(
@@ -333,3 +339,9 @@ class SimpleTransmon(Qubit):
     def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         pot = -self.joseph_energy * np.cos(flux)
         return pot
+
+    def wave_function(self) -> np.ndarray:
+        raise NotADirectoryError
+
+    def dielectric_loss(self) -> List[np.ndarray]:
+        raise NotImplementedError
