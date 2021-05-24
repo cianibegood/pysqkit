@@ -20,14 +20,16 @@ class Transmon(Qubit):
         label: str,
         charge_energy: float,
         joseph_energy: float,
-        flux: float,
+        ext_flux: Optional[float] = 0,
+        charge_offset: Optional[float] = 0,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
         self._ec = charge_energy
         self._ej = joseph_energy
-        self._flux = flux
+        self._ext_flux = ext_flux
+        self._n_offset = charge_offset
 
         if basis is None:
             basis = fock_basis(dim_hilbert)
@@ -43,7 +45,8 @@ class Transmon(Qubit):
             self.label,
             self.charge_energy,
             self.joseph_energy,
-            self.flux,
+            self.ext_flux,
+            self.charge_offset,
             basis=copy(self.basis),
         )
         return qubit_copy
@@ -65,12 +68,20 @@ class Transmon(Qubit):
         self._ej = joseph_energy
 
     @property
-    def flux(self) -> float:
-        return self._flux
+    def ext_flux(self) -> float:
+        return self._ext_flux
 
-    @flux.setter
-    def flux(self, flux: float) -> None:
-        self._flux = flux
+    @ext_flux.setter
+    def ext_flux(self, flux_val: float) -> None:
+        self._ext_flux = flux_val
+
+    @property
+    def charge_offset(self) -> float:
+        return self._n_offset
+
+    @charge_offset.setter
+    def charge_offset(self, offset_val: float) -> None:
+        self._n_offset = offset_val
 
     @property
     def res_freq(self) -> float:
@@ -86,8 +97,7 @@ class Transmon(Qubit):
 
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
-
-        return charge_op
+        return charge_op - self._n_offset
 
     def charge_op(
         self,
@@ -142,15 +152,13 @@ class Transmon(Qubit):
         self,
     ) -> np.ndarray:
         charge_op = self._get_charge_op()
-        charge_term = 4 * self._ec * charge_op * charge_op
+        charge_term = 4 * self._ec * (charge_op @ charge_op)
 
         flux_op = self._get_flux_op()
-        cos_mat = la.cosm(flux_op)
-        joseph_term = self.joseph_energy * cos_mat
+        joseph_term = self.joseph_energy * la.cosm(flux_op)
 
         hamil = charge_term - joseph_term
-
-        return hamil.real
+        return hamil
 
     def hamiltonian(self, *, as_qobj=False) -> np.ndarray:
         hamil = self.basis.finalize_op(self._get_hamiltonian())
@@ -173,6 +181,30 @@ class Transmon(Qubit):
 
     def dielectric_loss(self) -> List[np.ndarray]:
         raise NotImplementedError
+
+    @staticmethod
+    def from_freq(
+        label: str,
+        max_freq: float,
+        anharm: float,
+        ext_flux: Optional[float] = 0,
+        charge_offset: Optional[float] = 0.5,
+        *,
+        basis: Optional[OperatorBasis] = None,
+        dim_hilbert: Optional[int] = 100,
+    ) -> "Transmon":
+        charge_energy = -anharm
+        res_freq = max_freq - anharm
+        joseph_energy = (res_freq / np.sqrt(8 * charge_energy)) ** 2
+        return Transmon(
+            label,
+            charge_energy,
+            joseph_energy,
+            ext_flux,
+            charge_offset,
+            basis=basis,
+            dim_hilbert=dim_hilbert,
+        )
 
 
 class SimpleTransmon(Qubit):
@@ -211,7 +243,7 @@ class SimpleTransmon(Qubit):
             self.label,
             self.freq,
             self.anharm,
-            self.flux,
+            self.ext_flux,
             basis=copy(self.basis),
         )
         return qubit_copy
@@ -319,7 +351,7 @@ class SimpleTransmon(Qubit):
         q_attrs = dict(
             freq=self.freq,
             anham=self.anharm,
-            flux=self.flux,
+            ext_flux=self.ext_flux,
         )
         return q_attrs
 
@@ -356,3 +388,25 @@ class SimpleTransmon(Qubit):
 
     def dielectric_loss(self) -> List[np.ndarray]:
         raise NotImplementedError
+
+    @staticmethod
+    def from_energies(
+        label: str,
+        charge_energy: float,
+        joseph_energy: float,
+        ext_flux: Optional[float] = 0,
+        *,
+        basis: Optional[OperatorBasis] = None,
+        dim_hilbert: Optional[int] = 100,
+    ) -> "SimpleTransmon":
+        anharm = -charge_energy
+        res_freq = np.sqrt(8 * charge_energy * joseph_energy)
+        freq = res_freq + anharm
+        return SimpleTransmon(
+            label,
+            freq,
+            anharm,
+            ext_flux,
+            basis=basis,
+            dim_hilbert=dim_hilbert,
+        )
