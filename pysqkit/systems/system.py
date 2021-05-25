@@ -158,13 +158,12 @@ class Qubit(ABC):
         if as_xarray:
             data_arr = xr.DataArray(
                 data=mat_elems,
-                dims=["in_levels", "out_levels"],
+                dims=["in_level", "out_level"],
                 coords=dict(
-                    in_levels=levels_arr,
-                    out_levels=levels_arr,
+                    in_level=levels_arr,
+                    out_level=levels_arr,
                 ),
                 attrs=dict(
-                    operator=op,
                     dim_hilbert=self.dim_hilbert,
                     basis=str(self.basis),
                     **self._qubit_attrs,
@@ -548,13 +547,7 @@ class QubitSystem:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
-    def state(
-        self,
-        label: str,
-        *,
-        as_qobj=False,
-        as_dm=False,
-    ) -> Union[np.ndarray, Qobj]:
+    def state_index(self, label: str, energy_levels: np.ndarray) -> int:
         if len(label) != self.size:
             raise ValueError(
                 "label describe a {}-qubit state, while system "
@@ -578,9 +571,19 @@ class QubitSystem:
         bare_energy = sum(
             [qubit.eig_energies()[level] for level, qubit in zip(levels, qubits)]
         )
+        ind = np.argmin(np.abs(energy_levels - bare_energy))
+        return ind
+
+    def state(
+        self,
+        label: str,
+        *,
+        as_qobj=False,
+        as_dm=False,
+    ) -> Union[np.ndarray, Qobj]:
         eig_vals, eig_vecs = self.eig_states()
-        state_ind = np.argmin(np.abs(eig_vals - bare_energy))
-        state = eig_vecs[state_ind]
+        ind = self.state_index(label, eig_vals)
+        energy, state = eig_vals[ind], eig_vecs[ind]
 
         if as_qobj:
             sys_dims = [qubit.dim_hilbert for qubit in self._qubits]
@@ -592,12 +595,77 @@ class QubitSystem:
                 type="ket",
             )
             if as_dm:
-                return qobj_state * qobj_state.dag()
-            return qobj_state
+                return energy, qobj_state * qobj_state.dag()
+            return energy, qobj_state
 
         if as_dm:
-            return np.einsum("i, j-> ij", state, state.conj())
-        return state
+            return energy, np.einsum("i, j-> ij", state, state.conj())
+        return energy, state
+
+    def mat_elements(
+        self,
+        operator: Union[str, np.ndarray],
+        levels: Union[int, Iterable[int]] = None,
+        *,
+        as_xarray: Optional[bool] = False,
+    ) -> np.ndarray:
+        if isinstance(operator, str):
+            if hasattr(self.basis, operator):
+                _op = getattr(self.basis, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
+            elif hasattr(self, operator):
+                _op = getattr(self, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
+            else:
+                raise ValueError(
+                    "Given operator string not supported by"
+                    + "the qubit or its basis {}".format(str(self.basis))
+                )
+        elif isinstance(operator, np.ndarray):
+            op = operator
+        else:
+            raise ValueError("Incorrect operator provided")
+
+        _, in_states = self.eig_states(levels=levels)
+        _, out_states = self.eig_states(levels=levels)
+
+        mat_elems = get_mat_elem(op, in_states, out_states)
+
+        if levels is not None:
+            if isinstance(levels, int):
+                levels_arr = list(range(levels))
+            elif isinstance(levels, Iterable):
+                levels_arr = list(levels)
+        else:
+            levels_arr = list(range(self.dim_hilbert))
+
+        if as_xarray:
+            data_arr = xr.DataArray(
+                data=mat_elems,
+                dims=["in_level", "out_level"],
+                coords=dict(
+                    in_level=levels_arr,
+                    out_level=levels_arr,
+                ),
+                attrs=dict(
+                    dim_hilbert=self.dim_hilbert,
+                    basis=str(self.basis),
+                    **self._qubit_attrs,
+                ),
+            )
+
+            return data_arr
+        return mat_elems
 
     def _parse_levels(self, levels: Union[int, Iterable[int]]):
         if levels is not None:
