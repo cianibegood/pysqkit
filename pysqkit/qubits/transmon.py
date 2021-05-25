@@ -211,7 +211,7 @@ class SimpleTransmon(Qubit):
             self.label,
             self.freq,
             self.anharm,
-            self.flux,
+            self.ext_flux,
             basis=copy(self.basis),
         )
         return qubit_copy
