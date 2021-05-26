@@ -5,7 +5,6 @@ from copy import copy
 from functools import reduce
 
 import numpy as np
-from qutip.qobj import dims
 from scipy import linalg as la
 import xarray as xr
 from qutip import Qobj
@@ -15,16 +14,14 @@ from ..util.linalg import order_vecs, get_mat_elem, tensor_prod
 
 
 class Qubit(ABC):
-    def __init__(self,  label: str, basis: OperatorBasis):
+    def __init__(self, label: str, basis: OperatorBasis):
         if not isinstance(basis, OperatorBasis):
-            raise ValueError(
-                "basis must be an instance of bases.OperatorBasis class")
+            raise ValueError("basis must be an instance of bases.OperatorBasis class")
 
         self._basis = basis
 
         if not isinstance(label, str):
-            raise ValueError(
-                "The qubit label must be a string type variable")
+            raise ValueError("The qubit label must be a string type variable")
         self._label = label
 
     @property
@@ -69,25 +66,18 @@ class Qubit(ABC):
 
     def _get_eig_vals(self, subset_inds: Tuple[int]) -> np.ndarray:
         hamil = self.hamiltonian()
-        eig_vals = la.eigh(
-            hamil,
-            eigvals_only=True,
-            subset_by_index=subset_inds
-        )
+        eig_vals = la.eigh(hamil, eigvals_only=True, subset_by_index=subset_inds)
         return eig_vals
 
     def _get_eig_states(self, subset_inds: Tuple[int]) -> Tuple[np.ndarray, np.ndarray]:
         hamil = self.hamiltonian()
         eig_vals, eig_vecs = la.eigh(
-            hamil,
-            eigvals_only=False,
-            subset_by_index=subset_inds
+            hamil, eigvals_only=False, subset_by_index=subset_inds
         )
         return eig_vals, eig_vecs.T
 
     def eig_energies(
-        self,
-        levels: Optional[Union[int, Iterable[int]]] = None
+        self, levels: Optional[Union[int, Iterable[int]]] = None
     ) -> np.ndarray:
         subset_inds, sel_inds = self._parse_levels(levels)
         eig_vals = self._get_eig_vals(subset_inds)
@@ -96,8 +86,7 @@ class Qubit(ABC):
         return order_vecs(eig_vals)
 
     def eig_states(
-            self,
-            levels: Optional[Union[int, Iterable[int]]] = None
+        self, levels: Optional[Union[int, Iterable[int]]] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         subset_inds, sel_inds = self._parse_levels(levels)
         eig_vals, eig_vecs = self._get_eig_states(subset_inds)
@@ -107,8 +96,7 @@ class Qubit(ABC):
 
     def diagonalize_basis(self, num_levels: int) -> None:
         if not isinstance(num_levels, int):
-            raise ValueError(
-                "Number of levels must be an integer")
+            raise ValueError("Number of levels must be an integer")
         if num_levels < 1 or num_levels > self.dim_hilbert:
             raise ValueError(
                 "The number of level must be between 1 "
@@ -146,8 +134,9 @@ class Qubit(ABC):
 
             else:
                 raise ValueError(
-                    "Given operator string not supported by" +
-                    "the qubit or its basis {}".format(str(self.basis)))
+                    "Given operator string not supported by"
+                    + "the qubit or its basis {}".format(str(self.basis))
+                )
         elif isinstance(operator, np.ndarray):
             op = operator
         else:
@@ -169,28 +158,24 @@ class Qubit(ABC):
         if as_xarray:
             data_arr = xr.DataArray(
                 data=mat_elems,
-                dims=['in_levels', 'out_levels'],
+                dims=["in_level", "out_level"],
                 coords=dict(
-                    in_levels=levels_arr,
-                    out_levels=levels_arr,
+                    in_level=levels_arr,
+                    out_level=levels_arr,
                 ),
                 attrs=dict(
-                    operator=op,
                     dim_hilbert=self.dim_hilbert,
                     basis=str(self.basis),
-                    **self._qubit_attrs
-                )
+                    **self._qubit_attrs,
+                ),
             )
 
             return data_arr
         return mat_elems
 
     def couple_to(
-        self,
-        other_qubit: 'Qubit',
-        coupling: Callable = None,
-        ** kwargs
-    ) -> 'QubitSystem':
+        self, other_qubit: "Qubit", coupling: Callable = None, **kwargs
+    ) -> "QubitSystem":
         if not isinstance(other_qubit, Qubit):
             raise ValueError(
                 "Other qubit should be a Qubit object, "
@@ -203,7 +188,7 @@ class Qubit(ABC):
 
         if coupling is not None:
             if isinstance(coupling, Callable):
-                if 'qubits' in kwargs:
+                if "qubits" in kwargs:
                     raise ValueError(
                         "Multiple values for the keyword "
                         "arguement 'qubits' specified"
@@ -222,7 +207,8 @@ class Qubit(ABC):
             if isinstance(levels, int):
                 if levels < 1:
                     raise ValueError(
-                        "Number of levels must be an integer greater than 1")
+                        "Number of levels must be an integer greater than 1"
+                    )
                 if levels > self.dim_hilbert:
                     raise ValueError(
                         "Number of levels exceeds the "
@@ -242,8 +228,7 @@ class Qubit(ABC):
                     raise ValueError(
                         "The largest level index must be an integer "
                         "smaller then the basis dimensionality {}, "
-                        "instead got {}".format(
-                            self.dim_hilbert, subset_inds[1])
+                        "instead got {}".format(self.dim_hilbert, subset_inds[1])
                     )
                 _inds = list(range(subset_inds[0], subset_inds[1] + 1))
                 sel_inds = [_inds.index(level) for level in levels]
@@ -256,10 +241,10 @@ class Qubit(ABC):
 
 class Coupling:
     def __init__(
-            self,
-            prefactors: Union[float, complex, Iterable[Union[float, complex]]],
-            operators: Iterable[Dict[str, np.ndarray]],
-            qubits: Optional[List[str]] = None
+        self,
+        prefactors: Union[float, complex, Iterable[Union[float, complex]]],
+        operators: Iterable[Dict[str, np.ndarray]],
+        qubits: Optional[List[str]] = None,
     ):
 
         if isinstance(operators, dict):
@@ -270,8 +255,7 @@ class Coupling:
         for op in self._ops:
             for key, val in op.items():
                 if not isinstance(key, str):
-                    raise ValueError(
-                        "Operator keys must be qubit labels of type str")
+                    raise ValueError("Operator keys must be qubit labels of type str")
                 if not isinstance(val, np.ndarray):
                     raise ValueError("The operators must be np.ndarray type")
 
@@ -279,15 +263,15 @@ class Coupling:
             qubit_set = set(chain.from_iterable(op.keys() for op in self._ops))
             self._qubits = sorted(list(qubit_set))
         else:
-            involved_qubits = set(chain.from_iterable(op.keys()
-                                                      for op in self._ops))
+            involved_qubits = set(chain.from_iterable(op.keys() for op in self._ops))
 
             qubit_set = set(qubits)
             if len(qubit_set) != len(qubits):
                 raise ValueError("There are duplicate labels in the qubits")
             if qubit_set != involved_qubits:
                 raise ValueError(
-                    "Qubit labels have a mismatch with the operator labels")
+                    "Qubit labels have a mismatch with the operator labels"
+                )
             self._qubits = qubits
 
         self._hilbert_dims = {}
@@ -299,7 +283,8 @@ class Coupling:
                 if qubit in self._hilbert_dims:
                     if self._hilbert_dims[qubit] != qubit_op.shape[0]:
                         raise ValueError(
-                            "Mismatch in the dimensionality of the qubit operators in different terms")
+                            "Mismatch in the dimensionality of the qubit operators in different terms"
+                        )
                 else:
                     self._hilbert_dims[qubit] = qubit_op.shape[0]
 
@@ -308,7 +293,8 @@ class Coupling:
         elif isinstance(prefactors, Iterable):
             if len(prefactors) != len(self._ops):
                 raise ValueError(
-                    "Number of provided operators does not correspond to the number of terms in the Hamiltonian")
+                    "Number of provided operators does not correspond to the number of terms in the Hamiltonian"
+                )
             self._prefactors = list(prefactors)
 
     @property
@@ -325,7 +311,7 @@ class Coupling:
 
     def _get_hamiltonian(self) -> np.ndarray:
         dim = self.hilbert_dim
-        hamiltonian = np.zeros((dim, dim), dtype='complex')
+        hamiltonian = np.zeros((dim, dim), dtype="complex")
 
         for prefactor, op in self.hamiltonian_terms():
             hamiltonian += prefactor * op
@@ -339,15 +325,16 @@ class Coupling:
         return hamil
 
     def hamiltonian_terms(
-            self,
-            *,
-            tensor_ops=True
-    ) -> Iterable[Tuple[Union[float, complex], Union[np.ndarray, Dict[str, np.ndarray]]]]:
+        self, *, tensor_ops=True
+    ) -> Iterable[
+        Tuple[Union[float, complex], Union[np.ndarray, Dict[str, np.ndarray]]]
+    ]:
         if tensor_ops:
             for prefactor, term_ops in zip(self._prefactors, self._ops):
                 inv_qs = list(term_ops.keys())
                 total_ops = list(
-                    term_ops[q] if q in inv_qs else np.eye(self.hilbert_dims[q]) for q in self._qubits
+                    term_ops[q] if q in inv_qs else np.eye(self.hilbert_dims[q])
+                    for q in self._qubits
                 )
                 yield prefactor, tensor_prod(total_ops)
         else:
@@ -359,7 +346,7 @@ class QubitSystem:
     def __init__(
         self,
         qubits: Iterable[Qubit],
-        coupling: Optional[Union[Coupling, Iterable[Coupling]]] = None
+        coupling: Optional[Union[Coupling, Iterable[Coupling]]] = None,
     ) -> None:
         qubit_labels = []
 
@@ -367,7 +354,8 @@ class QubitSystem:
             if not isinstance(qubit, Qubit):
                 raise ValueError(
                     "Each qubit must be a pysqkit.Qubit object, "
-                    "instead got {}".format(type(qubit)))
+                    "instead got {}".format(type(qubit))
+                )
 
             if qubit.label in qubit_labels:
                 raise ValueError(
@@ -405,7 +393,8 @@ class QubitSystem:
                     if q not in self._labels:
                         raise ValueError(
                             "Coupling terms involve qubit "
-                            "{}, which is not part of the system".format(q))
+                            "{}, which is not part of the system".format(q)
+                        )
             self._coupling = coupling
         else:
             self._coupling = []
@@ -418,8 +407,7 @@ class QubitSystem:
             try:
                 return self._qubits[self._labels.index(q_label)]
             except KeyError:
-                raise KeyError(
-                    "Qubit {} is not part of the state".format(q_label))
+                raise KeyError("Qubit {} is not part of the state".format(q_label))
         elif isinstance(q_label, int):
             if q_label >= len(self._qubits) or q_label < 0:
                 raise ValueError("Index outside of number of qubits in system")
@@ -432,7 +420,8 @@ class QubitSystem:
             return qubit in self._qubits
         else:
             raise ValueError(
-                "Can't check if a {} object is in system".format(type(qubit)))
+                "Can't check if a {} object is in system".format(type(qubit))
+            )
 
     def __iter__(self) -> Iterable[Qubit]:
         yield from self._qubits
@@ -475,15 +464,14 @@ class QubitSystem:
                 inpt=bare_hamil,
                 dims=[sys_dims, sys_dims],
                 shape=bare_hamil.shape,
-                type='oper',
-                isherm=True
+                type="oper",
+                isherm=True,
             )
             return qobj_op
         return bare_hamil
 
     def int_hamiltonian(self, *, as_qobj=False) -> np.ndarray:
-        sys_dim = np.prod(
-            [qubit.basis.truncated_dim for qubit in self._qubits])
+        sys_dim = np.prod([qubit.basis.truncated_dim for qubit in self._qubits])
 
         int_hamiltonian = np.zeros((sys_dim, sys_dim), dtype=complex)
 
@@ -506,8 +494,8 @@ class QubitSystem:
                 inpt=int_hamiltonian,
                 dims=[sys_dims, sys_dims],
                 shape=int_hamiltonian.shape,
-                type='oper',
-                isherm=True
+                type="oper",
+                isherm=True,
             )
             return qobj_op
 
@@ -524,11 +512,7 @@ class QubitSystem:
         subset_inds: Tuple[int],
     ) -> np.ndarray:
         hamil = self.hamiltonian()
-        eig_vals = la.eigh(
-            hamil,
-            eigvals_only=True,
-            subset_by_index=subset_inds
-        )
+        eig_vals = la.eigh(hamil, eigvals_only=True, subset_by_index=subset_inds)
         return eig_vals
 
     def _get_eig_states(
@@ -537,9 +521,7 @@ class QubitSystem:
     ) -> Tuple[np.ndarray, np.ndarray]:
         hamil = self.hamiltonian()
         eig_vals, eig_vecs = la.eigh(
-            hamil,
-            eigvals_only=False,
-            subset_by_index=subset_inds
+            hamil, eigvals_only=False, subset_by_index=subset_inds
         )
         return eig_vals, eig_vecs.T
 
@@ -555,8 +537,8 @@ class QubitSystem:
         return order_vecs(eig_vals)
 
     def eig_states(
-            self,
-            levels: Optional[Union[int, Iterable[int]]] = None,
+        self,
+        levels: Optional[Union[int, Iterable[int]]] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         subset_inds, sel_inds = self._parse_levels(levels)
 
@@ -565,12 +547,133 @@ class QubitSystem:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
+    def state_index(self, label: str, energy_levels: np.ndarray) -> int:
+        if len(label) != self.size:
+            raise ValueError(
+                "label describe a {}-qubit state, while system "
+                "contains only {} qubits".format(len(label), self.size)
+            )
+        levels = [int(level) for level in label]
+
+        for level, qubit in zip(levels, self._qubits):
+            if int(level) >= qubit.dim_hilbert:
+                raise ValueError(
+                    "label specifies level {} for qubit {}, "
+                    "but qubit is {}-dimensional".format(
+                        level, qubit.label, qubit.dim_hilbert
+                    )
+                )
+
+        qubits = [copy(qubit) for qubit in self._qubits]
+        for qubit in qubits:
+            qubit.basis.unembed()
+
+        bare_energy = sum(
+            [qubit.eig_energies()[level] for level, qubit in zip(levels, qubits)]
+        )
+        ind = np.argmin(np.abs(energy_levels - bare_energy))
+        return ind
+
+    def state(
+        self,
+        label: str,
+        *,
+        as_qobj=False,
+        as_dm=False,
+    ) -> Union[np.ndarray, Qobj]:
+        eig_vals, eig_vecs = self.eig_states()
+        ind = self.state_index(label, eig_vals)
+        energy, state = eig_vals[ind], eig_vecs[ind]
+
+        if as_qobj:
+            sys_dims = [qubit.dim_hilbert for qubit in self._qubits]
+
+            qobj_state = Qobj(
+                inpt=state,
+                dims=[sys_dims, [1] * self.size],
+                shape=[np.prod(sys_dims), 1],
+                type="ket",
+            )
+            if as_dm:
+                return energy, qobj_state * qobj_state.dag()
+            return energy, qobj_state
+
+        if as_dm:
+            return energy, np.einsum("i, j-> ij", state, state.conj())
+        return energy, state
+
+    def mat_elements(
+        self,
+        operator: Union[str, np.ndarray],
+        levels: Union[int, Iterable[int]] = None,
+        *,
+        as_xarray: Optional[bool] = False,
+    ) -> np.ndarray:
+        if isinstance(operator, str):
+            if hasattr(self.basis, operator):
+                _op = getattr(self.basis, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
+            elif hasattr(self, operator):
+                _op = getattr(self, operator)
+                op = _op() if callable(_op) else _op
+                if not isinstance(op, np.ndarray):
+                    raise ValueError("Obtained operator is not a numpy array")
+                if len(op.shape) != 2:
+                    raise ValueError("The operator must be a 2D array")
+
+            else:
+                raise ValueError(
+                    "Given operator string not supported by"
+                    + "the qubit or its basis {}".format(str(self.basis))
+                )
+        elif isinstance(operator, np.ndarray):
+            op = operator
+        else:
+            raise ValueError("Incorrect operator provided")
+
+        _, in_states = self.eig_states(levels=levels)
+        _, out_states = self.eig_states(levels=levels)
+
+        mat_elems = get_mat_elem(op, in_states, out_states)
+
+        if levels is not None:
+            if isinstance(levels, int):
+                levels_arr = list(range(levels))
+            elif isinstance(levels, Iterable):
+                levels_arr = list(levels)
+        else:
+            levels_arr = list(range(self.dim_hilbert))
+
+        if as_xarray:
+            data_arr = xr.DataArray(
+                data=mat_elems,
+                dims=["in_level", "out_level"],
+                coords=dict(
+                    in_level=levels_arr,
+                    out_level=levels_arr,
+                ),
+                attrs=dict(
+                    dim_hilbert=self.dim_hilbert,
+                    basis=str(self.basis),
+                    **self._qubit_attrs,
+                ),
+            )
+
+            return data_arr
+        return mat_elems
+
     def _parse_levels(self, levels: Union[int, Iterable[int]]):
         if levels is not None:
             if isinstance(levels, int):
                 if levels < 1:
                     raise ValueError(
-                        "Number of levels must be an integer greater than 1")
+                        "Number of levels must be an integer greater than 1"
+                    )
                 if levels > self.dim_hilbert:
                     raise ValueError(
                         "Number of levels exceeds the "
@@ -590,8 +693,7 @@ class QubitSystem:
                     raise ValueError(
                         "The largest level index must be an integer "
                         "smaller then the basis dimensionality {}, "
-                        "instead got {}".format(
-                            self.dim_hilbert, subset_inds[1])
+                        "instead got {}".format(self.dim_hilbert, subset_inds[1])
                     )
                 _inds = list(range(subset_inds[0], subset_inds[1] + 1))
                 sel_inds = [_inds.index(level) for level in levels]
