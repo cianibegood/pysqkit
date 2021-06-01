@@ -1,3 +1,3 @@
-from . import linalg, phys
+from . import linalg, phys, quantum
 
-__all__ = ['linalg', 'phys']
+__all__ = ["linalg", "phys", "quantum"]
