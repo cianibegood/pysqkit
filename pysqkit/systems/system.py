@@ -508,18 +508,16 @@ class QubitSystem:
         return bare_hamiltonian + int_hamiltonian
 
     def _get_eig_vals(
-        self,
-        subset_inds: Tuple[int],
+        self, subset_inds: Tuple[int], bare_system: Optional[bool] = False
     ) -> np.ndarray:
-        hamil = self.hamiltonian()
+        hamil = self.bare_hamiltonian() if bare_system else self.hamiltonian()
         eig_vals = la.eigh(hamil, eigvals_only=True, subset_by_index=subset_inds)
         return eig_vals
 
     def _get_eig_states(
-        self,
-        subset_inds: Tuple[int],
+        self, subset_inds: Tuple[int], bare_system: Optional[bool] = False
     ) -> Tuple[np.ndarray, np.ndarray]:
-        hamil = self.hamiltonian()
+        hamil = self.bare_hamiltonian() if bare_system else self.hamiltonian()
         eig_vals, eig_vecs = la.eigh(
             hamil, eigvals_only=False, subset_by_index=subset_inds
         )
@@ -528,10 +526,10 @@ class QubitSystem:
     def eig_energies(
         self,
         levels: Optional[Union[int, Iterable[int]]] = None,
+        bare_system: Optional[bool] = False,
     ) -> np.ndarray:
         subset_inds, sel_inds = self._parse_levels(levels)
-
-        eig_vals = self._get_eig_vals(subset_inds)
+        eig_vals = self._get_eig_vals(subset_inds, bare_system)
         if sel_inds:
             return order_vecs(eig_vals[sel_inds])
         return order_vecs(eig_vals)
@@ -539,15 +537,21 @@ class QubitSystem:
     def eig_states(
         self,
         levels: Optional[Union[int, Iterable[int]]] = None,
+        bare_system: Optional[bool] = False,
     ) -> Tuple[np.ndarray, np.ndarray]:
         subset_inds, sel_inds = self._parse_levels(levels)
 
-        eig_vals, eig_vecs = self._get_eig_states(subset_inds)
+        eig_vals, eig_vecs = self._get_eig_states(subset_inds, bare_system)
         if sel_inds:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
-    def state_index(self, label: str, energy_levels: np.ndarray) -> int:
+    def state_index(
+        self,
+        label: str,
+        *,
+        bare_energies: Optional[np.ndarray] = None,
+    ) -> int:
         if len(label) != self.size:
             raise ValueError(
                 "label describe a {}-qubit state, while system "
@@ -555,6 +559,7 @@ class QubitSystem:
             )
         levels = [int(level) for level in label]
 
+        bare_energy = 0
         for level, qubit in zip(levels, self._qubits):
             if int(level) >= qubit.dim_hilbert:
                 raise ValueError(
@@ -563,43 +568,44 @@ class QubitSystem:
                         level, qubit.label, qubit.dim_hilbert
                     )
                 )
+            _qubit = copy(qubit)
+            _qubit.basis.unembed()
+            bare_energy += _qubit.eig_energies()[level]
 
-        qubits = [copy(qubit) for qubit in self._qubits]
-        for qubit in qubits:
-            qubit.basis.unembed()
-
-        bare_energy = sum(
-            [qubit.eig_energies()[level] for level, qubit in zip(levels, qubits)]
-        )
-        ind = np.argmin(np.abs(energy_levels - bare_energy))
+        if bare_energies is None:
+            bare_energies = self.eig_energies(bare_system=True)
+        ind = np.argmin(np.abs(bare_energies - bare_energy))
         return ind
 
     def state(
         self,
         label: str,
         *,
-        as_qobj=False,
-        as_dm=False,
+        as_xarray: Optional[bool] = False,
+        as_qobj: Optional[bool] = False,
     ) -> Union[np.ndarray, Qobj]:
         eig_vals, eig_vecs = self.eig_states()
-        ind = self.state_index(label, eig_vals)
+        ind = self.state_index(label)
         energy, state = eig_vals[ind], eig_vecs[ind]
 
         if as_qobj:
-            sys_dims = [qubit.dim_hilbert for qubit in self._qubits]
+            q_dims = [qubit.dim_hilbert for qubit in self._qubits]
 
             qobj_state = Qobj(
                 inpt=state,
-                dims=[sys_dims, [1] * self.size],
-                shape=[np.prod(sys_dims), 1],
+                dims=[q_dims, [1] * self.size],
+                shape=[np.prod(q_dims), 1],
                 type="ket",
             )
-            if as_dm:
-                return energy, qobj_state * qobj_state.dag()
-            return energy, qobj_state
 
-        if as_dm:
-            return energy, np.einsum("i, j-> ij", state, state.conj())
+            return energy, qobj_state
+        if as_xarray:
+            state_arr = xr.DataArray(
+                state,
+                dims=["basis_ind"],
+                coords=dict(label=label, energy=energy),
+            )
+            return state_arr
         return energy, state
 
     def mat_elements(
