@@ -1,5 +1,5 @@
 
-from .systems import QubitSystem, Coupling
+from .systems import Qubit, QubitSystem, Coupling
 from . import qubits
 from . import couplers
 from . import operators
@@ -11,6 +11,7 @@ __all__ = [
     'couplers',
     'operators',
     'bases',
+    'Qubit',
     'QubitSystem',
     'Coupling',
     'util',
