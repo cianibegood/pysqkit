@@ -665,8 +665,6 @@ class QubitSystem:
                 ),
                 attrs=dict(
                     dim_hilbert=self.dim_hilbert,
-                    basis=str(self.basis),
-                    **self._qubit_attrs,
                 ),
             )
 
