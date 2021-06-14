@@ -3,6 +3,7 @@ from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
 from itertools import chain
 from copy import copy
 from functools import reduce
+from inspect import signature
 
 import numpy as np
 from scipy import linalg as la
@@ -340,6 +341,134 @@ class Coupling:
         else:
             for prefactor, term_ops in zip(self._prefactors, self._ops):
                 yield prefactor, term_ops
+
+
+class Drive:
+    def __init__(
+        self,
+        pulse: Union[float, complex, Callable],
+        operator: np.ndarray,
+        qubit_label: Optional[str] = None,
+    ):
+
+        if not isinstance(operator, np.ndarray):
+            raise ValueError("The operators must be np.ndarray type")
+        if len(operator.shape) != 2 or operator.shape[0] != operator.shape[1]:
+            raise ValueError("operator must be a square matrix")
+
+        self._op = operator
+        self._hilbert_dim = operator.shape[0]
+
+        self._qubit = qubit_label
+        self._params = None
+
+        if isinstance(pulse, Callable):
+            sig = signature(pulse)
+            self._params = {}
+
+            for param in sig.parameters.values():
+                if param.default is param.empty:
+                    self._params[param.name] = None
+                else:
+                    self._params[param.name] = param.default
+        elif not isinstance(pulse, (float, complex)):
+            raise ValueError(
+                "pulse expected to be float, complex or callable, "
+                "instead got {}".format(type(pulse))
+            )
+        self._pulse = pulse
+
+    @property
+    def qubit(self):
+        return self._qubit
+
+    @property
+    def hilbert_dim(self):
+        return self._hilbert_dim
+
+    @property
+    def params(self):
+        return self._params
+
+    @property
+    def free_params(self):
+        free_params = [par for par, val in self._params.items() if val is None]
+        return free_params
+
+    def set_params(self, **params):
+        for param, val in params.items():
+            if param not in self._params:
+                raise ValueError("parameter {} not in drive parameters".format(param))
+            self._params[param] = val
+
+    def _get_hamiltonian(self, include_pulse=True, **params) -> np.ndarray:
+        hamil = self._op
+        if include_pulse:
+            pulse = self.eval_pulse(**params)
+            if isinstance(pulse, (float, complex)):
+                return pulse * hamil
+            elif isinstance(pulse, np.ndarray):
+                if len(pulse.shape) != 1:
+                    raise ValueError(
+                        "Evaluated pulse expected to be vector, "
+                        "instead got {}-dimensional array".format(len(pulse.shape))
+                    )
+                return np.einsum("i, jk -> ijk", pulse, hamil)
+            else:
+                raise ValueError("Unsupported pulse type {}".format(type(pulse)))
+        return hamil
+
+    def hamiltonian(
+        self,
+        *,
+        as_qobj=False,
+        include_pulse=True,
+        **params,
+    ) -> np.ndarray:
+        hamil = self._get_hamiltonian(include_pulse, **params)
+        if as_qobj:
+            dim = self._hilbert_dim
+            hamil_dims = len(hamil.shape)
+            if hamil_dims == 2:
+                qobj_op = Qobj(
+                    inpt=hamil,
+                    dims=[dim, dim],
+                    shape=hamil.shape,
+                    type="oper",
+                    isherm=True,
+                )
+                return qobj_op
+            elif hamil_dims == 3:
+                qobj_ops = []
+                for hamil_op in hamil:
+                    qobj_op = Qobj(
+                        inpt=hamil_op,
+                        dims=[dim, dim],
+                        shape=hamil.shape,
+                        type="oper",
+                        isherm=True,
+                    )
+                    qobj_ops.append(qobj_op)
+                return qobj_ops
+            else:
+                raise ValueError(
+                    "Unsupported hamiltonian dimensionality for qobj conversion"
+                )
+        return hamil
+
+    def eval_pulse(self, **params):
+        if isinstance(self._pulse, (float, complex)):
+            return self._pulse
+
+        free_params = set(self.free_params)
+        set_params = set(params)
+        if not free_params.issubset(set_params):
+            unset_params = [par for par in free_params if par not in set_params]
+            raise ValueError("Drive parameters not specified: {}".format(unset_params))
+
+        pulse_params = {**self.params, **params}
+        pulse = self._pulse(**pulse_params)
+        return pulse
 
 
 class QubitSystem:
