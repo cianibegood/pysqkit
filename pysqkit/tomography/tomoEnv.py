@@ -105,30 +105,59 @@ class TomoEnv:
         table_states = None):
             '''  table_states is None if we want to take the bare basis'''
             
+            #def type
+            assert definition_type in ['U', 'kraus', '2-qubit simu']
             self._definition_type = definition_type
             
+            #nb_levels and d
             if isinstance(nb_levels, int):
                 nb_levels = [nb_levels]
             self._nb_levels = nb_levels
             self._d = np.prod(nb_levels)
             
+            #parameters 
+            if self._definition_type == 'U':
+                assert 'U' in param_syst.keys()
+                assert hasattr(param_syst['U'], 'shape') \
+                        and (param_syst['U'].shape[0] == self._d) \
+                        and (param_syst['U'].shape[1] == self._d)
+                        
+            elif self._definition_type == 'kraus':
+                assert 'op_list' in param_syst.keys()
+                assert len(param_syst['op_list']) <= self._d**2
+                for op in param_syst['op_list']:
+                    assert hasattr(op, 'shape') \
+                            and (op.shape[0] == self._d) \
+                            and (op.shape[1] == self._d)
+            
+            elif self._definition_type == '2-qubit simu':
+                assert 'qb1' in param_syst.keys()
+                assert 'qb2' in param_syst.keys()
+                assert 'jc' in param_syst.keys()
+                
+                # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
+                # table_states = param_syst['get_state_basis'](param_syst)
+                
+                # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
+                # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
+                # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
+                # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
+                
+                assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
+                #the simu one takes an initial state (of type qobj) and param_syst
+                
+                
+                
+            self._param_syst = param_syst 
+            
+            #table_states
             if table_states is None:
                 self._table_states = []
                 for k in range(self._d):
                     self._table_states.append(qtp.fock(self._nb_levels, _n_th(self._nb_levels, k) ))
             else :
                 self._table_states = table_states #should be a list of states in ket form, ordered by ascending label
-            
-            
-            if self._table_states[0].type == 'ket':
-                self._state_representation = 'ket'
 
-            else: 
-                print("Error : the type of the states in table_stats is not recognized, it should be ket")
-                raise ValueError
-                
-            self._param_syst = param_syst #should have a function called simu that takes dict and init
-            #init can be a list to use the state_table OR a a Qobj
         
 #only getters, no setters        
     @property
@@ -315,7 +344,7 @@ class TomoEnv:
         
         res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
         for op in op_list:
-            assert isinstance(op, qtp.Qobj)
+            op = qtp.Qobj(op, dims = state_init.dims)
             res+= op*state_init*op.dag()
         
         return res
@@ -354,11 +383,36 @@ class TomoEnv:
         return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
         
         
-    def _gate_from_simu(self, init):
+    def _gate_from_simu(self, init): 
         '''param should contain 'simu' that runs simu from a dict with parameters and init  ;
-        simu should be able to deal with a difinition via list of directly a Qobj'''
-        return self.param_syst['simu'](init, self.param_syst)  #warning, for superpositions, I need kets
-        #normalize every state that goes in ?
+        simu should onlytake init as Qobj'''
+        if isinstance(init, list): #definition via index or label and prefactors
+            ket_init = qtp.Qobj(np.zeros((self.d, 1)), dims =  [self.nb_levels, [1,1]])
+            for tpl in init:
+                if isinstance(tpl[1], int):#I need kets for superpositions
+                    ket_init += tpl[0] * self._ket_index(tpl[1])
+                    
+                elif isinstance(tpl[1], Iterable[int]):
+                    ket_init += tpl[0] * self._ket_label(tpl[1])
+                    
+                else:
+                    print("Error : init not recognized")
+                    return None
+            state_init = (ket_init * ket_init.dag())
+            
+        elif isinstance(init, qtp.qobj.Qobj): #Qobj directly (necessary at some point)
+            if init.type == 'ket':
+                state_init = init * init.dag()
+            elif init.type == 'oper':
+                state_init = init
+            else:
+                print("Type of the initial state not recognized, if entered as qobj it should be 'oper' or 'ket'")
+            
+        state_init = state_init.unit() #it's a choice   
+        
+        return self.param_syst['simu'](state_init, self.param_syst)  
+        #'simu' should only take density matrices
+        
             
     def gate(self, init):
         if self._definition_type == 'kraus':
@@ -367,7 +421,7 @@ class TomoEnv:
         elif self._definition_type == 'U':
             return self._gate_from_U(init)
         
-        elif self._definition_type == 'simu':
+        elif self._definition_type == '2-qubit simu':
             return self._gate_from_simu(init)
         
         else :
