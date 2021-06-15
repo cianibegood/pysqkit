@@ -24,6 +24,7 @@ class Qubit(ABC):
         if not isinstance(label, str):
             raise ValueError("The qubit label must be a string type variable")
         self._label = label
+        self._drives = []
 
     @property
     def label(self) -> str:
@@ -44,6 +45,14 @@ class Qubit(ABC):
     @property
     def dim_hilbert(self) -> int:
         return self._basis.truncated_dim
+
+    @property
+    def drives(self) -> List["Drive"]:
+        return self._drives
+
+    @property
+    def is_driven(self) -> bool:
+        return len(self.drives) > 0
 
     @abstractmethod
     def hamiltonian(self) -> np.ndarray:
@@ -174,8 +183,37 @@ class Qubit(ABC):
             return data_arr
         return mat_elems
 
+    def add_drive(self, drive: Union[Callable, "Drive"], **kwargs):
+        if isinstance(drive, Callable):
+            if "qubit" in kwargs:
+                raise ValueError(
+                    "Multiple values for the keyword arguement 'qubit' given"
+                )
+            _drive = drive(self, **kwargs)
+            self._drives.append(_drive)
+        elif isinstance(drive, Drive):
+            if drive.label is not None:
+                if drive.label in [q_drive.label for q_drive in self._drives]:
+                    raise ValueError("Labeled drive already applied to this qubit")
+                if drive.hilbert_dim != self.dim_hilbert:
+                    raise ValueError(
+                        "Dimensionality mismatch between the drive operator "
+                        "(d={}) and the qubit (d={})".format(
+                            drive.hilbert_dim, self.dim_hilbert
+                        )
+                    )
+            self._drives.append(drive)
+        else:
+            raise ValueError(
+                "drive expected to be pysqkit.Drive or "
+                "Callable, instead got {}".format(type(drive))
+            )
+
     def couple_to(
-        self, other_qubit: "Qubit", coupling: Callable = None, **kwargs
+        self,
+        other_qubit: "Qubit",
+        coupling: Optional[Union["Coupling", Callable]] = None,
+        **kwargs,
     ) -> "QubitSystem":
         if not isinstance(other_qubit, Qubit):
             raise ValueError(
@@ -195,6 +233,10 @@ class Qubit(ABC):
                         "arguement 'qubits' specified"
                     )
                 return QubitSystem(qubits, coupling(qubits=qubits, **kwargs))
+            elif isinstance(coupling, Coupling):
+                if not all(q.label in coupling._qubits for q in qubits):
+                    raise ValueError("Not all qubits defined in coupling term")
+                return QubitSystem(qubits, coupling)
             else:
                 raise ValueError(
                     "Coupling arguement expected to be pysqkit.CouplerTerm or "
@@ -348,18 +390,34 @@ class Drive:
         self,
         pulse: Union[float, complex, Callable],
         operator: np.ndarray,
-        qubit_label: Optional[str] = None,
+        label: Optional[str] = None,
+        hilbert_dim: Optional[Union[int, Tuple[int]]] = None,
     ):
 
         if not isinstance(operator, np.ndarray):
             raise ValueError("The operators must be np.ndarray type")
         if len(operator.shape) != 2 or operator.shape[0] != operator.shape[1]:
             raise ValueError("operator must be a square matrix")
-
         self._op = operator
-        self._hilbert_dim = operator.shape[0]
 
-        self._qubit = qubit_label
+        op_dim = operator.shape[0]
+        if hilbert_dim is not None:
+            if np.product(hilbert_dim) != op_dim:
+                raise ValueError(
+                    "Mismatch between provided hilbert_dim={} and "
+                    "dimensionality of operator: {}".format(hilbert_dim, op_dim)
+                )
+            self._hilbert_dim = hilbert_dim
+        else:
+            self._hilbert_dim = op_dim
+
+        if label is not None:
+            if not isinstance(label, str):
+                raise ValueError(
+                    "drive_label expected to be str, "
+                    "instead got {}".format(type(label))
+                )
+        self._label = label
         self._params = None
 
         if isinstance(pulse, Callable):
@@ -378,9 +436,28 @@ class Drive:
             )
         self._pulse = pulse
 
+    def __copy__(self) -> "Drive":
+        drive_copy = self.__class__(
+            self._pulse,
+            self._op,
+            self._label,
+            self._hilbert_dim,
+        )
+        drive_copy._params = self._params
+        return drive_copy
+
     @property
-    def qubit(self):
-        return self._qubit
+    def label(self) -> str:
+        return self._label
+
+    @label.setter
+    def label(self, new_label: str) -> None:
+        if not isinstance(new_label, str):
+            raise ValueError(
+                "drive_label expected to be str, "
+                "instead got {}".format(type(new_label))
+            )
+        self._label = new_label
 
     @property
     def hilbert_dim(self):
@@ -506,6 +583,11 @@ class QubitSystem:
         sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
         for qubit_ind, qubit in enumerate(self._qubits):
             qubit.basis.embed(qubit_ind, sys_dims)
+            if qubit.is_driven:
+                for qubit_drive in qubit.drives:
+                    expanded_op = qubit.basis.expand_op(qubit_drive._op)
+                    qubit_drive._op = expanded_op
+                    qubit_drive._hilbert_dim = sys_dims
 
         if coupling is not None:
             if not isinstance(coupling, Iterable):
