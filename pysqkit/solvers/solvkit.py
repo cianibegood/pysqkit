@@ -17,7 +17,7 @@ def integrate(
 
     if len(drive) != len(pulse):
         raise ValueError(
-            "The number of drive operators must be equal to the " + "number of pulses!"
+            "The number of drive operators must be equal to the number of pulses!"
         )
 
     if solver not in supported_solvers:
