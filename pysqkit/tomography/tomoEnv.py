@@ -113,7 +113,7 @@ class TomoEnv:
             if isinstance(nb_levels, int):
                 nb_levels = [nb_levels]
             self._nb_levels = nb_levels
-            self._d = np.prod(nb_levels)
+            self._d = int(np.prod(nb_levels))
             
             #parameters 
             if self._definition_type == 'U':
@@ -677,26 +677,110 @@ class TomoEnv:
             return qtp.Qobj(inpt = chi_th_mat, dims = [[self.nb_levels, self.nb_levels], [self.nb_levels, self.nb_levels]]) #?
         else:
             return chi_th_mat
+
+## Fidelities :
+
+    def L1(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
+        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
+    
+        The process is explained in the tomography tutorial'''
+    
+        if isinstance(lambda_mat, qtp.Qobj):
+            lambda_mat = lambda_mat.full()
+        if isinstance(inv_ideal_lambda, qtp.Qobj):
+            inv_ideal_lambda = inv_ideal_lambda.full()
+            
+        assert isinstance(lambda_mat, np.ndarray)
+        assert isinstance(inv_ideal_lambda, np.ndarray)
+        
+        lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
+        
+        #list of indices of states in table states in chi1 and chi2
+        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
+        if labels_chi_1 is None:
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        
+        ind_chi_1 = []
+        for tpl in labels_chi_1:
+            ind_chi_1.append(int(  np.sum(
+                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
+                                          )
+                                ))
+            
+        ind_chi_2 = []
+        for k in range(self.d):
+            if not (k in ind_chi_1):
+                ind_chi_2.append(k)
+        
+        res = 0
+        for i in ind_chi_1:
+            for j in ind_chi_2:
+                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+                
+                
+        return res/len(ind_chi_1)
+        
+    def L2(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
+        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E'''
+    
+        if isinstance(lambda_mat, qtp.Qobj):
+            lambda_mat = lambda_mat.full()
+        if isinstance(inv_ideal_lambda, qtp.Qobj):
+            inv_ideal_lambda = inv_ideal_lambda.full()
+            
+        assert isinstance(lambda_mat, np.ndarray)
+        assert isinstance(inv_ideal_lambda, np.ndarray)
+        
+        lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
+        
+        #list of indices of states in table states in chi1 and chi2
+        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
+        if labels_chi_1 is None:
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        
+        ind_chi_1 = []
+        for tpl in labels_chi_1:
+            ind_chi_1.append(int(  np.sum(
+                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
+                                          )
+                                ))
+                                
+        ind_chi_2 = []
+        for k in range(self.d):
+            if not (k in ind_chi_1):
+                ind_chi_2.append(k)
+        
+        res = 0
+        for i in ind_chi_2:
+            for j in ind_chi_2:
+                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+                
+        return  1 - res/len(ind_chi_2)   
+        
         
         
 ### Tests
 
 
-nb_levels =  [3, 2]
-U_id = qtp.qeye(nb_levels)
-
-param_test = {
-    'U' : U_id
-}
-
-
-env = TomoEnv(nb_levels, "U", param_test)
+# nb_levels =  [2,3]
+# U_id = qtp.qeye(nb_levels)
+# 
+# param_test = {
+#     'U' : U_id
+# }
+# 
+# 
+# env = TomoEnv(nb_levels, "U", param_test)
 # 
 # 
 # deb = time.time()
 # lambda_mat = env.fct_to_lambda(draw_lambda = True, as_qobj = False)
 # print("It took ", time.time() - deb, "seconds")
-
+# 
+# print(env.L1(lambda_mat, lambda_mat))
+# print(env.L2(lambda_mat, lambda_mat))
 # 
 # deb = time.time()
 # chi_mat = env.lambda_to_chi(lambda_mat, draw_chi = True, as_qobj = False)
