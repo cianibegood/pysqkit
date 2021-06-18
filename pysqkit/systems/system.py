@@ -3,6 +3,7 @@ from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
 from itertools import chain
 from copy import copy
 from functools import reduce
+from inspect import signature
 
 import numpy as np
 from scipy import linalg as la
@@ -23,6 +24,7 @@ class Qubit(ABC):
         if not isinstance(label, str):
             raise ValueError("The qubit label must be a string type variable")
         self._label = label
+        self._drives = []
 
     @property
     def label(self) -> str:
@@ -43,6 +45,14 @@ class Qubit(ABC):
     @property
     def dim_hilbert(self) -> int:
         return self._basis.truncated_dim
+
+    @property
+    def drives(self) -> List["Drive"]:
+        return self._drives
+
+    @property
+    def is_driven(self) -> bool:
+        return len(self.drives) > 0
 
     @abstractmethod
     def hamiltonian(self) -> np.ndarray:
@@ -173,8 +183,37 @@ class Qubit(ABC):
             return data_arr
         return mat_elems
 
+    def add_drive(self, drive: Union[Callable, "Drive"], **kwargs):
+        if isinstance(drive, Callable):
+            if "qubit" in kwargs:
+                raise ValueError(
+                    "Multiple values for the keyword arguement 'qubit' given"
+                )
+            _drive = drive(self, **kwargs)
+            self._drives.append(_drive)
+        elif isinstance(drive, Drive):
+            if drive.label is not None:
+                if drive.label in [q_drive.label for q_drive in self._drives]:
+                    raise ValueError("Labeled drive already applied to this qubit")
+                if drive.hilbert_dim != self.dim_hilbert:
+                    raise ValueError(
+                        "Dimensionality mismatch between the drive operator "
+                        "(d={}) and the qubit (d={})".format(
+                            drive.hilbert_dim, self.dim_hilbert
+                        )
+                    )
+            self._drives.append(drive)
+        else:
+            raise ValueError(
+                "drive expected to be pysqkit.Drive or "
+                "Callable, instead got {}".format(type(drive))
+            )
+
     def couple_to(
-        self, other_qubit: "Qubit", coupling: Callable = None, **kwargs
+        self,
+        other_qubit: "Qubit",
+        coupling: Optional[Union["Coupling", Callable]] = None,
+        **kwargs,
     ) -> "QubitSystem":
         if not isinstance(other_qubit, Qubit):
             raise ValueError(
@@ -194,6 +233,10 @@ class Qubit(ABC):
                         "arguement 'qubits' specified"
                     )
                 return QubitSystem(qubits, coupling(qubits=qubits, **kwargs))
+            elif isinstance(coupling, Coupling):
+                if not all(q.label in coupling._qubits for q in qubits):
+                    raise ValueError("Not all qubits defined in coupling term")
+                return QubitSystem(qubits, coupling)
             else:
                 raise ValueError(
                     "Coupling arguement expected to be pysqkit.CouplerTerm or "
@@ -342,6 +385,169 @@ class Coupling:
                 yield prefactor, term_ops
 
 
+class Drive:
+    def __init__(
+        self,
+        pulse: Union[float, complex, Callable],
+        operator: np.ndarray,
+        label: Optional[str] = None,
+        hilbert_dim: Optional[Union[int, Tuple[int]]] = None,
+    ):
+
+        if not isinstance(operator, np.ndarray):
+            raise ValueError("The operators must be np.ndarray type")
+        if len(operator.shape) != 2 or operator.shape[0] != operator.shape[1]:
+            raise ValueError("operator must be a square matrix")
+        self._op = operator
+
+        op_dim = operator.shape[0]
+        if hilbert_dim is not None:
+            if np.product(hilbert_dim) != op_dim:
+                raise ValueError(
+                    "Mismatch between provided hilbert_dim={} and "
+                    "dimensionality of operator: {}".format(hilbert_dim, op_dim)
+                )
+            self._hilbert_dim = hilbert_dim
+        else:
+            self._hilbert_dim = op_dim
+
+        if label is not None:
+            if not isinstance(label, str):
+                raise ValueError(
+                    "drive_label expected to be str, "
+                    "instead got {}".format(type(label))
+                )
+        self._label = label
+        self._params = None
+
+        if isinstance(pulse, Callable):
+            sig = signature(pulse)
+            self._params = {}
+
+            for param in sig.parameters.values():
+                if param.default is param.empty:
+                    self._params[param.name] = None
+                else:
+                    self._params[param.name] = param.default
+        elif not isinstance(pulse, (float, complex)):
+            raise ValueError(
+                "pulse expected to be float, complex or callable, "
+                "instead got {}".format(type(pulse))
+            )
+        self._pulse = pulse
+
+    def __copy__(self) -> "Drive":
+        drive_copy = self.__class__(
+            self._pulse,
+            self._op,
+            self._label,
+            self._hilbert_dim,
+        )
+        drive_copy._params = self._params
+        return drive_copy
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    @label.setter
+    def label(self, new_label: str) -> None:
+        if not isinstance(new_label, str):
+            raise ValueError(
+                "drive_label expected to be str, "
+                "instead got {}".format(type(new_label))
+            )
+        self._label = new_label
+
+    @property
+    def hilbert_dim(self):
+        return self._hilbert_dim
+
+    @property
+    def params(self):
+        return self._params
+
+    @property
+    def free_params(self):
+        free_params = [par for par, val in self._params.items() if val is None]
+        return free_params
+
+    def set_params(self, **params):
+        for param, val in params.items():
+            if param not in self._params:
+                raise ValueError("parameter {} not in drive parameters".format(param))
+            self._params[param] = val
+
+    def _get_hamiltonian(self, include_pulse=False, **params) -> np.ndarray:
+        hamil = self._op
+        if include_pulse:
+            pulse = self.eval_pulse(**params)
+            if isinstance(pulse, (float, complex)):
+                return pulse * hamil
+            elif isinstance(pulse, np.ndarray):
+                if len(pulse.shape) != 1:
+                    raise ValueError(
+                        "Evaluated pulse expected to be vector, "
+                        "instead got {}-dimensional array".format(len(pulse.shape))
+                    )
+                return np.einsum("i, jk -> ijk", pulse, hamil)
+            else:
+                raise ValueError("Unsupported pulse type {}".format(type(pulse)))
+        return hamil
+
+    def hamiltonian(
+        self,
+        *,
+        as_qobj=False,
+        include_pulse=False,
+        **params,
+    ) -> np.ndarray:
+        hamil = self._get_hamiltonian(include_pulse, **params)
+        if as_qobj:
+            dim = self._hilbert_dim
+            hamil_dims = len(hamil.shape)
+            if hamil_dims == 2:
+                qobj_op = Qobj(
+                    inpt=hamil,
+                    dims=[dim, dim],
+                    shape=hamil.shape,
+                    type="oper",
+                    isherm=True,
+                )
+                return qobj_op
+            elif hamil_dims == 3:
+                qobj_ops = []
+                for hamil_op in hamil:
+                    qobj_op = Qobj(
+                        inpt=hamil_op,
+                        dims=[dim, dim],
+                        shape=hamil.shape,
+                        type="oper",
+                        isherm=True,
+                    )
+                    qobj_ops.append(qobj_op)
+                return qobj_ops
+            else:
+                raise ValueError(
+                    "Unsupported hamiltonian dimensionality for qobj conversion"
+                )
+        return hamil
+
+    def eval_pulse(self, **params):
+        if isinstance(self._pulse, (float, complex)):
+            return self._pulse
+
+        free_params = set(self.free_params)
+        set_params = set(params)
+        if not free_params.issubset(set_params):
+            unset_params = [par for par in free_params if par not in set_params]
+            raise ValueError("Drive parameters not specified: {}".format(unset_params))
+
+        pulse_params = {**self.params, **params}
+        pulse = self._pulse(**pulse_params)
+        return pulse
+
+
 class QubitSystem:
     def __init__(
         self,
@@ -377,6 +583,11 @@ class QubitSystem:
         sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
         for qubit_ind, qubit in enumerate(self._qubits):
             qubit.basis.embed(qubit_ind, sys_dims)
+            if qubit.is_driven:
+                for qubit_drive in qubit.drives:
+                    expanded_op = qubit.basis.expand_op(qubit_drive._op)
+                    qubit_drive._op = expanded_op
+                    qubit_drive._hilbert_dim = sys_dims
 
         if coupling is not None:
             if not isinstance(coupling, Iterable):

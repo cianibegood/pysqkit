@@ -49,6 +49,7 @@ class Transmon(Qubit):
             self.charge_offset,
             basis=copy(self.basis),
         )
+        qubit_copy._drives = [copy(drive) for drive in self._drives]
         return qubit_copy
 
     @property
