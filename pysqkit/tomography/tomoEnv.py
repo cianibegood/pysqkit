@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from scipy import linalg as la
 
 # import pysqkit
-# from pysqkit.solvers.solvkit import integrate
+from pysqkit.solvers.solvkit import integrate
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
    
@@ -26,6 +26,9 @@ def _n_th(maxs, n):
     
     res = [int(k) for k in temp]
     return res
+    
+def _index_from_label(maxs, label):
+    return int(np.sum([label[i] * np.prod(maxs[i+1:])  for i in range(len(label))]))
     
 #visualisation
 def draw_mat(mat, mat_name, vmin = np.NaN, vmax = np.NaN, show = False):
@@ -99,65 +102,105 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN, show = 
 class TomoEnv:   
     def __init__(
         self,
-        nb_levels: Union[int, Iterable[int]],
-        definition_type: str,
-        param_syst,
+        system = None,
+        definition_type: str = None,
+        nb_levels: Union[int, Iterable[int]] = None ,
+        param_syst = None,
         table_states = None):
-            '''  table_states is None if we want to take the bare basis'''
+            '''  Either system is not None and it's all we need OR system is None and all the rest must be defined
             
-            #def type
-            assert definition_type in ['U', 'kraus', '2-qubit simu']
-            self._definition_type = definition_type
+            table_states is None if we want to take the bare basis'''
             
-            #nb_levels and d
-            if isinstance(nb_levels, int):
-                nb_levels = [nb_levels]
-            self._nb_levels = nb_levels
-            self._d = int(np.prod(nb_levels))
+            if system is None: #old method
             
-            #parameters 
-            if self._definition_type == 'U':
-                assert 'U' in param_syst.keys()
-                assert hasattr(param_syst['U'], 'shape') \
-                        and (param_syst['U'].shape[0] == self._d) \
-                        and (param_syst['U'].shape[1] == self._d)
-                        
-            elif self._definition_type == 'kraus':
-                assert 'op_list' in param_syst.keys()
-                assert len(param_syst['op_list']) <= self._d**2
-                for op in param_syst['op_list']:
-                    assert hasattr(op, 'shape') \
-                            and (op.shape[0] == self._d) \
-                            and (op.shape[1] == self._d)
-            
-            elif self._definition_type == '2-qubit simu':
-                assert 'qb1' in param_syst.keys()
-                assert 'qb2' in param_syst.keys()
-                assert 'jc' in param_syst.keys()
-                
-                # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
-                # table_states = param_syst['get_state_basis'](param_syst)
-                
-                # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
-                # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
-                # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
-                # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
-                
-                assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
-                #the simu one takes an initial state (of type qobj) and param_syst
+                assert not definition_type is None
+                assert not nb_levels is None
+                assert not param_syst is None
                 
                 
+                #def type
+                assert definition_type in ['U', 'kraus', '2-qubit simu']
+                self._definition_type = definition_type
                 
-            self._param_syst = param_syst 
-            
-            #table_states
-            if table_states is None:
-                self._table_states = []
-                for k in range(self._d):
-                    self._table_states.append(qtp.fock(self._nb_levels, _n_th(self._nb_levels, k) ))
-            else :
-                self._table_states = table_states #should be a list of states in ket form, ordered by ascending label
+                #nb_levels and d
+                if isinstance(nb_levels, int):
+                    nb_levels = [nb_levels]
+                self._nb_levels = nb_levels
+                self._d = int(np.prod(nb_levels))
+                
+                #parameters 
+                if self._definition_type == 'U':
+                    assert 'U' in param_syst.keys()
+                    assert hasattr(param_syst['U'], 'shape') \
+                            and (param_syst['U'].shape[0] == self._d) \
+                            and (param_syst['U'].shape[1] == self._d)
+                            
+                elif self._definition_type == 'kraus':
+                    assert 'op_list' in param_syst.keys()
+                    assert len(param_syst['op_list']) <= self._d**2
+                    for op in param_syst['op_list']:
+                        assert hasattr(op, 'shape') \
+                                and (op.shape[0] == self._d) \
+                                and (op.shape[1] == self._d)
+                
+                elif self._definition_type == '2-qubit simu':
+                    assert 'qb1' in param_syst.keys()
+                    assert 'qb2' in param_syst.keys()
+                    assert 'jc' in param_syst.keys()
+                    
+                    # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
+                    # table_states = param_syst['get_state_basis'](param_syst)
+                    
+                    # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
+                    # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
+                    # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
+                    # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
+                    
+                    assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
+                    #the simu one takes an initial state (of type qobj) and param_syst
+                    
+                    
+                    
+                self._param_syst = param_syst 
+                
+                #table_states
+                if table_states is None:
+                    self._table_states = []
+                    for k in range(self._d):
+                        self._table_states.append(qtp.fock(self._nb_levels, _n_th(self._nb_levels, k) ))
+                else :
+                    self._table_states = table_states #should be a list of states in ket form, ordered by ascending label
 
+
+
+
+
+            else : #def from system, only system will be taken into consideration
+            #for now only deals with 2 qubit systems
+                self._nb_levels = [qubit.dim_hilbert for qubit in system.qubits]
+                self._d = int(np.prod(self._nb_levels))
+                self._definition_type = '2system'
+                
+                #table_states
+                self._table_states = [system.state(_n_th(self._nb_levels, n), as_qobj = True)[1] for n in range(self._d)] 
+                
+                self._param_syst =  {}
+                self._param_syst['system'] = system
+                
+                def simu(state_init):
+                    tlist = [drive.params['time'] for qubit in system for drive in qubit.drives][0]#we assume that it is lways the same
+                    hamil0 = system.hamiltonian(as_qobj=True)
+                    
+                    hamil_drive = [drive.hamiltonian(as_qobj=True) for qubit in system for drive in qubit.drives]
+                    pulse_drive = [drive.eval_pulse() for qubit in system for drive in qubit.drives]
+                    
+                    jump_list = [] #system. ??
+                
+                    result = integrate(tlist, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
+                    return result.states[-1]
+                    
+                self._param_syst['simu'] = simu
+                    
         
 #only getters, no setters        
     @property
@@ -193,10 +236,7 @@ class TomoEnv:
             print("Error! : The length of the label doens't match ; it should be of length"+str(len(nb_levels)))
             
         else:
-            res = 0
-            for k in range(len(label)):
-                res+= label[k]*nb_levels[k]
-            return res
+            return _index_from_label(self.nb_levels, label)
             
 
 
@@ -309,39 +349,7 @@ class TomoEnv:
         return res
     
 # Defining gates
-    def _gate_from_Kraus(self, init):
-        ''' init should be a list of tuples shaped like this :
-        tuple[0] is the prefactor and tuple[1] is the label(if size >1) or the index(if size 1)  ;
-        param should contain a 'op_list' list of Kraus operators'''
-        
-        param = self.param_syst
-        op_list = param['op_list']
-        
-        if isinstance(init, list): #definition via index or label and prefactors
-            ket_init = qtp.Qobj(np.zeros((self.d, 1)), dims =  [self.nb_levels, [1,1]])
-            for tpl in init:
-                if isinstance(tpl[1], int):#I need kets for superpositions
-                    ket_init += tpl[0] * self._ket_index(tpl[1])
-                    
-                elif isinstance(tpl[1], Iterable[int]):
-                    ket_init += tpl[0] * self._ket_label(tpl[1])
-                    
-                else:
-                    print("Error : init not recognized")
-                    return None
-            state_init = (ket_init * ket_init.dag())
-            
-        elif isinstance(init, qtp.qobj.Qobj): #Qobj directly (necessary at some point)
-            if init.type == 'ket':
-                state_init = init * init.dag()
-            elif init.type == 'oper':
-                state_init = init
-            else:
-                print("Type of the initial state not recognized, if entered as qobj it should be 'oper' or 'ket'")
-        
-        
-        state_init = state_init.unit() #it's a choice
-        
+    def _gate_from_Kraus(self, state_init):
         res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
         for op in op_list:
             op = qtp.Qobj(op, dims = state_init.dims)
@@ -350,54 +358,41 @@ class TomoEnv:
         return res
     
     
-    def _gate_from_U(self, init): 
+    def _gate_from_U(self, state_init): 
         '''param should contain U which is a 2D numpy array'''
-    
-        param = self.param_syst
-        U = param['U']
-        
-        if isinstance(init, list): #definition via index or label and prefactors
-            ket_init = qtp.Qobj(np.zeros((self.d, 1)), dims =  [self.nb_levels, [1,1]])
-            for tpl in init:
-                if isinstance(tpl[1], int):#I need kets for superpositions
-                    ket_init += tpl[0] * self._ket_index(tpl[1])
-                    
-                elif isinstance(tpl[1], Iterable[int]):
-                    ket_init += tpl[0] * self._ket_label(tpl[1])
-                    
-                else:
-                    print("Error : init not recognized")
-                    return None
-            state_init = (ket_init * ket_init.dag())
-            
-        elif isinstance(init, qtp.qobj.Qobj): #Qobj directly (necessary at some point)
-            if init.type == 'ket':
-                state_init = init * init.dag()
-            elif init.type == 'oper':
-                state_init = init
-            else:
-                print("Type of the initial state not recognized, if entered as qobj it should be 'oper' or 'ket'")
-            
-        state_init = state_init.unit() #it's a choice   
-        
+        U = self.param_syst['U']
         return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
         
         
-    def _gate_from_simu(self, init): 
+    def _gate_from_simu(self, state_init): 
         '''param should contain 'simu' that runs simu from a dict with parameters and init  ;
         simu should onlytake init as Qobj'''
+        if self._definition_type == '2-qubit simu':
+            return self.param_syst['simu'](state_init, self.param_syst)  
+            
+        elif self._definition_type == '2system':
+            return self.param_syst['simu'](state_init)
+        
+            
+    def gate(self, init):
+        
         if isinstance(init, list): #definition via index or label and prefactors
             ket_init = qtp.Qobj(np.zeros((self.d, 1)), dims =  [self.nb_levels, [1,1]])
             for tpl in init:
                 if isinstance(tpl[1], int):#I need kets for superpositions
                     ket_init += tpl[0] * self._ket_index(tpl[1])
                     
-                elif isinstance(tpl[1], Iterable[int]):
+                elif isinstance(tpl[1], Iterable) :
+                    assert len(tpl[1]) == len(self.nb_levels)
+                    for k in tpl[1]:
+                        assert isinstance(k, int)
+                        
                     ket_init += tpl[0] * self._ket_label(tpl[1])
                     
                 else:
                     print("Error : init not recognized")
                     return None
+                    
             state_init = (ket_init * ket_init.dag())
             
         elif isinstance(init, qtp.qobj.Qobj): #Qobj directly (necessary at some point)
@@ -410,19 +405,19 @@ class TomoEnv:
             
         state_init = state_init.unit() #it's a choice   
         
-        return self.param_syst['simu'](state_init, self.param_syst)  
-        #'simu' should only take density matrices
         
-            
-    def gate(self, init):
+        #now the different possible cases
         if self._definition_type == 'kraus':
-            return self._gate_from_Kraus(init)
+            return self._gate_from_Kraus(state_init)
             
         elif self._definition_type == 'U':
-            return self._gate_from_U(init)
+            return self._gate_from_U(state_init)
         
         elif self._definition_type == '2-qubit simu':
-            return self._gate_from_simu(init)
+            return self._gate_from_simu(state_init)
+            
+        elif self._definition_type == '2system':
+            return self._gate_from_simu(state_init)
         
         else :
             print("Error ! \nDefinition type not recognized. \nPossible values are : \
@@ -434,10 +429,42 @@ class TomoEnv:
 # the studied function is gate that uses the definition type specifyed in self._definition_type
 
 #fct_to_lambda
-    def fct_to_lambda(self, draw_lambda = False, as_qobj = False):
-                
+    def fct_to_lambda(self, in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False):
+        ''' in_labels or out_labels are at "comp_states" if only 00, 01, 10, 11 ; 
+            "all" if all
+            else : in a list of tuples'''
+            
+        #clean label lists
+        if in_labels == "comp_states":
+            in_labels = [(0,0), (0,1), (1,0), (1,1)]
+        if out_labels == "comp_states":
+            out_labels = [(0,0), (0,1), (1,0), (1,1)]
+            
+        if in_labels == "all":
+            in_labels = [self._index_to_label(k) for k in range(self.d)]
+        if out_labels == "all":
+            out_labels = [self._index_to_label(k) for k in range(self.d)]
+            
+        assert isinstance(in_labels, list)
+        assert isinstance(out_labels, list)
+        
+        for lbl in in_labels:
+            assert len(lbl) == len(self.nb_levels)
+        for lbl in out_labels:
+            assert len(lbl) == len(self.nb_levels)
+            
+            
+        #now transform ito lists of indices
+        in_ind = []
+        out_ind = []
+        for lbl in in_labels:
+            in_ind.append(self._label_to_index(lbl))
+        for lbl in out_labels:
+            out_ind.append(self._label_to_index(lbl))        
+
+            
         #function to calculate rho_primes
-        def rho_prime(n,m):
+        def rho_prime(n,m):#n,m are indices in the table_states ie in the order of all labels
             if n == m:
                 return self.gate([[1, n]])
             else :
@@ -450,20 +477,22 @@ class TomoEnv:
     
         d = self.d
         #skeleton
-        lambda_mat = np.zeros((d**2, d**2))*1j
+        lambda_mat = np.zeros((len(in_ind)**2 , len(out_ind)**2))*1j
     
         #filling
-        for i in range(d**2):
-            n_i, m_i = _n_th([d,d], i)
+        for i in range(len(in_ind)**2):
+            #we range over the pairs of in_labels
+            n_i, m_i = _n_th([len(in_ind),len(in_ind)], i)
             
-            rho_prime_i = rho_prime(n_i, m_i)
+            rho_prime_i = rho_prime(in_ind[n_i], in_ind[m_i])
             
                 
-            for j in range(d**2):
-                n_j, m_j = _n_th([d,d], j)
+            for j in range(len(out_ind)**2):
+                #we range over the pairs of out_labels
+                n_j, m_j = _n_th([len(out_ind),len(out_ind)], j)
                 
                 lambda_mat[i,j] = np.trace(rho_prime_i.full().dot(
-                                                self._rho_nm(n_j, m_j).dag().full())  
+                                                self._rho_nm(out_ind[n_j], out_ind[m_j]).dag().full())  
                                         )
                 
         if draw_lambda:
@@ -473,7 +502,144 @@ class TomoEnv:
             return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, rho_prime_i.dims]) #?
         else:
             return lambda_mat
+            
+            
+## Fidelities efficiently
 
+    def L1(self, labels_chi_1 = "comp_states"):
+        '''default as 'comp_states' ie 00, 01, 10, 11'''
+        
+        if labels_chi_1 == "comp_states":
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        init = []
+        for label in labels_chi_1:
+            init.append([1/len(labels_chi_1), label])
+
+        res = self.gate(init)
+        
+        return 1 - np.sum([self._bra_label(label) * res * self._ket_label(label) for label in labels_chi_1])
+        
+    def L2(self, labels_chi_1 = "comp_states"):
+        
+        if labels_chi_1 == "comp_states":
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        #work out ind_chi_2
+        ind_chi_1 = []
+        for lbl in labels_chi_1:
+            ind_chi_1.append(self._label_to_index(lbl))
+            
+        ind_chi_2 = []
+        for k in range(self.d):
+            if not (k in ind_chi_1):
+                ind_chi_2.append(k)
+                
+                
+        init = []
+        for ind in ind_chi_2:
+            init.append([1/len(ind_chi_2), ind])
+        
+        res = self.gate(init)
+        
+        return  np.sum([self._bra_label(label) * res * self._ket_label(label) for label in labels_chi_1])
+        
+             
+
+
+## Fidelities : (with lambda)
+
+    def L1_with_lambda(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
+        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
+    
+        The process is explained in the tomography tutorial      
+          
+        If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
+        
+        if inv_ideal_lambda is None :
+            lambda_tilde = lambda_mat
+            
+        else:
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+            if isinstance(inv_ideal_lambda, qtp.Qobj):
+                inv_ideal_lambda = inv_ideal_lambda.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(inv_ideal_lambda, np.ndarray)
+            
+            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
+        
+        #list of indices of states in table states in chi1 and chi2
+        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
+        if labels_chi_1 is None:
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        
+        ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
+            
+        ind_chi_2 = []
+        for k in range(self.d):
+            if not (k in ind_chi_1):
+                ind_chi_2.append(k)
+        
+        res = 0
+        for i in ind_chi_1:
+            for j in ind_chi_2:
+                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+                
+                
+        return res/len(ind_chi_1)
+        
+    def L2_with_lambda(self, lambda_mat, inv_ideal_lambda =  None, labels_chi_1 = None): 
+        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
+        
+        If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
+        
+        if inv_ideal_lambda is None :
+            lambda_tilde = lambda_mat
+            
+        else:
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+            if isinstance(inv_ideal_lambda, qtp.Qobj):
+                inv_ideal_lambda = inv_ideal_lambda.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(inv_ideal_lambda, np.ndarray)
+            
+            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
+        
+        #list of indices of states in table states in chi1 and chi2
+        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
+        if labels_chi_1 is None:
+            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        
+        ind_chi_1 = []
+        for tpl in labels_chi_1:
+            ind_chi_1.append(int(  np.sum(
+                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
+                                          )
+                                ))
+                                
+        ind_chi_2 = []
+        for k in range(self.d):
+            if not (k in ind_chi_1):
+                ind_chi_2.append(k)
+        
+        res = 0
+        for i in ind_chi_2:
+            for j in ind_chi_2:
+                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+                
+        return  1 - res/len(ind_chi_2)   
+        
+        
+
+        
+
+###Not needed
 #fct_to_PTM
     def fct_to_PTM(self, draw_PTM = False, as_qobj = False):
                         
@@ -678,93 +844,11 @@ class TomoEnv:
         else:
             return chi_th_mat
 
-## Fidelities :
 
-    def L1(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
-        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
-    
-        The process is explained in the tomography tutorial'''
-    
-        if isinstance(lambda_mat, qtp.Qobj):
-            lambda_mat = lambda_mat.full()
-        if isinstance(inv_ideal_lambda, qtp.Qobj):
-            inv_ideal_lambda = inv_ideal_lambda.full()
-            
-        assert isinstance(lambda_mat, np.ndarray)
-        assert isinstance(inv_ideal_lambda, np.ndarray)
-        
-        lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
-            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-            
-        
-        ind_chi_1 = []
-        for tpl in labels_chi_1:
-            ind_chi_1.append(int(  np.sum(
-                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
-                                          )
-                                ))
-            
-        ind_chi_2 = []
-        for k in range(self.d):
-            if not (k in ind_chi_1):
-                ind_chi_2.append(k)
-        
-        res = 0
-        for i in ind_chi_1:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
-                
-                
-        return res/len(ind_chi_1)
-        
-    def L2(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
-        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E'''
-    
-        if isinstance(lambda_mat, qtp.Qobj):
-            lambda_mat = lambda_mat.full()
-        if isinstance(inv_ideal_lambda, qtp.Qobj):
-            inv_ideal_lambda = inv_ideal_lambda.full()
-            
-        assert isinstance(lambda_mat, np.ndarray)
-        assert isinstance(inv_ideal_lambda, np.ndarray)
-        
-        lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
-            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-            
-        
-        ind_chi_1 = []
-        for tpl in labels_chi_1:
-            ind_chi_1.append(int(  np.sum(
-                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
-                                          )
-                                ))
-                                
-        ind_chi_2 = []
-        for k in range(self.d):
-            if not (k in ind_chi_1):
-                ind_chi_2.append(k)
-        
-        res = 0
-        for i in ind_chi_2:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
-                
-        return  1 - res/len(ind_chi_2)   
-        
-        
-        
 ### Tests
 
 
-# nb_levels =  [2,3]
+# nb_levels =  [4,3]
 # U_id = qtp.qeye(nb_levels)
 # 
 # param_test = {
@@ -772,15 +856,22 @@ class TomoEnv:
 # }
 # 
 # 
-# env = TomoEnv(nb_levels, "U", param_test)
-# 
+# env = TomoEnv(system = None,
+#                 definition_type = "U",
+#                 nb_levels = nb_levels, 
+#                 param_syst = param_test, 
+#                 table_states = None)
 # 
 # deb = time.time()
-# lambda_mat = env.fct_to_lambda(draw_lambda = True, as_qobj = False)
+# lambda_mat = env.fct_to_lambda(draw_lambda = False, as_qobj = False)
 # print("It took ", time.time() - deb, "seconds")
 # 
-# print(env.L1(lambda_mat, lambda_mat))
-# print(env.L2(lambda_mat, lambda_mat))
+# print(env.L1().real)
+# print(env.L2().real)
+# 
+# plt.show()
+
+
 # 
 # deb = time.time()
 # chi_mat = env.lambda_to_chi(lambda_mat, draw_chi = True, as_qobj = False)
@@ -791,4 +882,3 @@ class TomoEnv:
 # # chi_th_mat = env.lambda_to_chi_with_beta(lambda_mat, draw_chi = True, as_qobj = False)
 # # print("It took ", time.time() - deb, "seconds")
 # #     
-# plt.show()
