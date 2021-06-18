@@ -478,7 +478,7 @@ class Drive:
                 raise ValueError("parameter {} not in drive parameters".format(param))
             self._params[param] = val
 
-    def _get_hamiltonian(self, include_pulse=True, **params) -> np.ndarray:
+    def _get_hamiltonian(self, include_pulse=False, **params) -> np.ndarray:
         hamil = self._op
         if include_pulse:
             pulse = self.eval_pulse(**params)
@@ -499,7 +499,7 @@ class Drive:
         self,
         *,
         as_qobj=False,
-        include_pulse=True,
+        include_pulse=False,
         **params,
     ) -> np.ndarray:
         hamil = self._get_hamiltonian(include_pulse, **params)

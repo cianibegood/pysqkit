@@ -5,6 +5,7 @@ from . import drives
 from . import operators
 from . import bases
 from . import util
+from . import solvers
 
 __all__ = [
     "qubits",
@@ -16,4 +17,5 @@ __all__ = [
     "QubitSystem",
     "Coupling",
     "util",
+    "solvers",
 ]
