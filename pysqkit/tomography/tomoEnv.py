@@ -96,6 +96,61 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN, show = 
     if show:
         plt.show()
     
+    
+            
+def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
+    ''' both env should have the same size, and the same eigenstates'''
+    
+    if labels_chi_1 == "comp_states":
+        labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+        
+    ind_chi_1 = [env_real._label_to_index(label) for label in labels_chi_1]
+    
+    lambda_real = env_real.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
+    lambda_ideal = env_ideal.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
+    
+    assert lambda_real.shape == lambda_ideal.shape
+    
+    lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
+
+
+    return np.trace(lambda_tilde)/(len(labels_chi_1)**2)
+    
+def avg_gate_fid(env_real, env_ideal, labels_chi_1 = "comp_states"):
+    d1 = len(labels_chi_1)
+    L1 = env_real.L1(labels_chi_1)
+    F_pro = process_fidelity(env_real, env_ideal, labels_chi_1)
+    
+    return (d1*F_pro + 1 - L1)/(d1 + 1)
+    
+def L1_from_scratch(system, labels_chi_1 = "comp_states"):
+    env = TomoEnv(system = system)
+    return env.L1(labels_chi_1)
+    
+def L2_from_scratch(system, labels_chi_1 = "comp_states"):
+    env = TomoEnv(system = system)
+    return env.L2(labels_chi_1)
+    
+def process_fidelity_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+    env_real = TomoEnv(system = system)
+    env_ideal = TomoEnv(definition_type = 'U',
+                        nb_levels = env_real.nb_levels,
+                        param_syst = {'U' : U_ideal},
+                        table_states = env_real._table_states)
+    
+    return process_fidelity(env_real, env_ideal, labels_chi_1)
+    
+    
+def avg_gate_fid_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+    env_real = TomoEnv(system = system)
+    env_ideal = TomoEnv(definition_type = 'U',
+                        nb_levels = env_real.nb_levels,
+                        param_syst = {'U' : U_ideal},
+                        table_states = env_real._table_states)
+    
+    return avg_gate_fid(env_real, env_ideal, labels_chi_1)
+    
+        
 ##  Tomo env class 
     
     
@@ -499,7 +554,7 @@ class TomoEnv:
             draw_mat(lambda_mat, "\lambda")  
         
         if as_qobj:
-            return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, rho_prime_i.dims]) #?
+            return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) #?
         else:
             return lambda_mat
             
@@ -543,8 +598,9 @@ class TomoEnv:
         res = self.gate(init)
         
         return  np.sum([self._bra_label(label) * res * self._ket_label(label) for label in labels_chi_1])
+
         
-             
+        
 
 
 ## Fidelities : (with lambda)
@@ -844,7 +900,7 @@ class TomoEnv:
         else:
             return chi_th_mat
 
-
+        
 ### Tests
 
 
