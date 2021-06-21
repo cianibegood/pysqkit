@@ -106,13 +106,13 @@ def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
         
     ind_chi_1 = [env_real._label_to_index(label) for label in labels_chi_1]
     
-    lambda_real = env_real.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
-    lambda_ideal = env_ideal.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
+    lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
+    lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
     assert lambda_real.shape == lambda_ideal.shape
     
-    lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
-
+    # lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
+    lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
 
     return np.trace(lambda_tilde)/(len(labels_chi_1)**2)
     
@@ -243,15 +243,24 @@ class TomoEnv:
                 self._param_syst['system'] = system
                 
                 def simu(state_init):
-                    tlist = [drive.params['time'] for qubit in system for drive in qubit.drives][0]#we assume that it is lways the same
+                    tlist = [qubit.drives[drive_key].params['time'] for qubit in system for drive_key in qubit.drives.keys()][0]#we assume that it is lways the same
                     hamil0 = system.hamiltonian(as_qobj=True)
                     
-                    hamil_drive = [drive.hamiltonian(as_qobj=True) for qubit in system for drive in qubit.drives]
-                    pulse_drive = [drive.eval_pulse() for qubit in system for drive in qubit.drives]
+                    hamil_drive = []
+                    pulse_drive = []
+                    
+                    for qubit in system:
+                        if qubit.is_driven:
+                            for label, drive in qubit.drives.items():
+                                hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                                pulse_drive.append(drive.eval_pulse())
                     
                     jump_list = [] #system. ??
                 
+                    # print(tlist)
+                    
                     result = integrate(tlist, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
+            
                     return result.states[-1]
                     
                 self._param_syst['simu'] = simu
