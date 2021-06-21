@@ -180,7 +180,7 @@ class Transmon(Qubit):
         return pot
 
     def wave_function(self) -> np.ndarray:
-        raise NotADirectoryError
+        raise NotImplementedError
 
     def dielectric_loss(self) -> List[np.ndarray]:
         raise NotImplementedError
