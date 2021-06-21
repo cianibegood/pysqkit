@@ -1,16 +1,18 @@
-from typing import Optional
-
-import numpy as np
+from typing import Callable, Optional
 
 from ..systems import Qubit, Drive
+
+from . import pulses
+from . import pulse_shapes
 
 
 def microwave_drive(
     qubit: Qubit,
-    amp: Optional[float] = None,
-    freq: Optional[float] = None,
-    phase: Optional[float] = None,
-    label: Optional[str] = None,
+    label: str,
+    *,
+    pulse: Optional[Callable] = None,
+    pulse_shape: Optional[Callable] = None,
+    **drive_params,
 ) -> Drive:
     if not isinstance(qubit, Qubit):
         raise ValueError(
@@ -19,26 +21,13 @@ def microwave_drive(
         )
 
     charge_op = qubit.charge_op()
-    drive_params = {}
-
-    param_names = ["amp", "freq", "phase"]
-    param_vals = [amp, freq, phase]
-
-    for name, val in zip(param_names, param_vals):
-        if val is not None:
-            if not isinstance(val, float):
-                raise ValueError(
-                    "{} expected to float, got {} instead".format(name, val)
-                )
-            drive_params[name] = val
-
-    def microwave_pulse(time, amp, freq, phase):
-        return amp * np.cos(2 * np.pi * freq * time + phase)
 
     drive = Drive(
-        pulse=microwave_pulse,
         operator=charge_op,
+        pulse=pulse or pulses.cos_modulation,
         label=label,
+        pulse_shape=pulse_shape
+        or pulse_shapes.gaussian_top,  # Currently here only for convenience
     )
 
     drive.set_params(**drive_params)
