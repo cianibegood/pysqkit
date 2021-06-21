@@ -49,7 +49,9 @@ class Transmon(Qubit):
             self.charge_offset,
             basis=copy(self.basis),
         )
-        qubit_copy._drives = [copy(drive) for drive in self._drives]
+        qubit_copy._drives = {
+            label: copy(drive) for label, drive in self._drives.items()
+        }
         return qubit_copy
 
     @property
@@ -247,6 +249,9 @@ class SimpleTransmon(Qubit):
             self.ext_flux,
             basis=copy(self.basis),
         )
+        qubit_copy._drives = {
+            label: copy(drive) for label, drive in self._drives.items()
+        }
         return qubit_copy
 
     @property
