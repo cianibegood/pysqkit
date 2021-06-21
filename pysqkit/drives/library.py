@@ -81,13 +81,13 @@ def gaussian_microwave_drive(
         if time < rise_time:
             prefactor = 1/flat_amplitude*(np.exp(-(time - \
                 rise_time)**2/(2*sigma**2)) - np.exp(-rise_time**2/(2*sigma**2)))
-            return prefactor*np.cos(2*np.pi*freq*time)
+            return amp*prefactor*np.cos(2*np.pi*freq*time)
         elif time < rise_time + plateau_time:
-            return np.cos(2*np.pi*freq*time)
+            return amp*np.cos(2*np.pi*freq*time)
         else:
             prefactor = 1/flat_amplitude*(np.exp(-(time - plateau_time - \
                 rise_time)**2/(2*sigma**2)) - np.exp(-rise_time**2/(2*sigma**2)))
-            return prefactor*np.cos(2*np.pi*freq*time)
+            return amp*prefactor*np.cos(2*np.pi*freq*time)
 
     drive = Drive(
         pulse=gaussian_microwave_pulse,
