@@ -13,7 +13,7 @@ import cmath
 
 # import pysqkit
 from pysqkit.solvers.solvkit import integrate
-from pysqkit.util.linalg import tensor_prod
+
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
    
@@ -111,7 +111,7 @@ def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     
     lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
-    U_correc = correc(lambda_real)
+    U_correc = correc(lambda_real, self.nb_levels)
     U_ideal_correc = U_correc.conj().T.dot(U_ideal)
      
     env_ideal = TomoEnv(definition_type = 'U',
@@ -264,7 +264,8 @@ class TomoEnv:
                     
                     result = integrate(tlist, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
             
-                    return result.states[-1]
+                    res = result.states[-1]
+                    return res/np.trace(res.full())
                     
                 self._param_syst['simu'] = simu
                     
@@ -418,28 +419,29 @@ class TomoEnv:
 # Defining gates
     def _gate_from_Kraus(self, state_init):
         res = qtp.Qobj(np.zeros(state_init.shape), dims = state_init.dims)
-        for op in op_list:
+        for op in self.param_syst['op_list']:
             op = qtp.Qobj(op, dims = state_init.dims)
             res+= op*state_init*op.dag()
         
-        return res
+        return res/np.trace(res.full())
     
     
     def _gate_from_U(self, state_init): 
         '''param should contain U which is a 2D numpy array'''
-        U = self.param_syst['U']
-        return qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]) * state_init * qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]).dag()
+        U =  qtp.Qobj(self.param_syst['U'], dims = [self.nb_levels, self.nb_levels])
+        res = (U * state_init * U.dag() )
+        return res/np.trace(res.full())
         
         
     def _gate_from_simu(self, state_init): 
         '''param should contain 'simu' that runs simu from a dict with parameters and init  ;
         simu should onlytake init as Qobj'''
         if self._definition_type == '2-qubit simu':
-            return self.param_syst['simu'](state_init, self.param_syst)  
+            res =  self.param_syst['simu'](state_init, self.param_syst)  
             
         elif self._definition_type == '2system':
-            return self.param_syst['simu'](state_init)
-        
+            res =  self.param_syst['simu'](state_init)
+        return res/np.trace(res.full())
             
     def gate(self, init):
         
@@ -582,10 +584,12 @@ class TomoEnv:
         init = []
         for label in labels_chi_1:
             init.append([1/len(labels_chi_1), label])
-
+        
         res = self.gate(init)
         
-        return 1 - np.sum([self._bra_label(label) * res * self._ket_label(label) for label in labels_chi_1])
+        return 1 - np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1])
+        
+        # (self._bra_label(label) * res * self._ket_label(label)).full()[0,0] for label in labels_chi_1])
         
     def L2(self, labels_chi_1 = "comp_states"):
         
@@ -609,7 +613,8 @@ class TomoEnv:
         
         res = self.gate(init)
         
-        return  np.sum([self._bra_label(label) * res * self._ket_label(label) for label in labels_chi_1])
+        return np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1]) 
+        # np.sum([(self._bra_label(label) * res * self._ket_label(label)).full()[0,0] for label in labels_chi_1])
 
         
         
@@ -639,20 +644,18 @@ class TomoEnv:
             lambda_tilde = lambda_real
             
         else:
-            U_correc = correc(lambda_real)
+            U_correc = correc(lambda_real, self.nb_levels)
             U_ideal_correc = U_correc.conj().T.dot(U_ideal)
             
             env_ideal = TomoEnv(definition_type = 'U',
-                                nb_levels = env_real.nb_levels,
+                                nb_levels = self.nb_levels,
                                 param_syst = {'U' : U_ideal_correc},
-                                table_states = env_real._table_states)
+                                table_states = self._table_states)
             lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
     
             assert lambda_real.shape == lambda_ideal.shape
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
                 
-            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(lambda_real, np.ndarray)
             assert isinstance(lambda_ideal, np.ndarray)
         
             lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
@@ -663,7 +666,8 @@ class TomoEnv:
         res = 0
         for i in range(len(ind_chi_1)):
             for j in range(len(ind_chi_2)):
-                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)].real
+                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)]                   
+                #np.abs(lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)])
                 
                 
         return res/len(ind_chi_1)
@@ -692,20 +696,18 @@ class TomoEnv:
             lambda_tilde = lambda_real
             
         else:
-            U_correc = correc(lambda_real)
+            U_correc = correc(lambda_real, self.nb_levels)
             U_ideal_correc = U_correc.conj().T.dot(U_ideal)
             
             env_ideal = TomoEnv(definition_type = 'U',
-                                nb_levels = env_real.nb_levels,
+                                nb_levels = self.nb_levels,
                                 param_syst = {'U' : U_ideal_correc},
-                                table_states = env_real._table_states)
+                                table_states = self._table_states)
             lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
     
             assert lambda_real.shape == lambda_ideal.shape
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
-                
-            assert isinstance(lambda_mat, np.ndarray)
+
+            assert isinstance(lambda_real, np.ndarray)
             assert isinstance(lambda_ideal, np.ndarray)
         
             lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
@@ -713,7 +715,8 @@ class TomoEnv:
         res = 0
         for i in range(len(ind_chi_2)):
             for j in range(len(ind_chi_2)):
-                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)].real
+                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)]
+                # np.abs(lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)])
                 
         return  1 - res/len(ind_chi_2)   
         
