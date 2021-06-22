@@ -3,7 +3,6 @@ from typing import Callable, Optional
 from ..systems import Qubit, Drive
 
 from . import pulses
-from . import pulse_shapes
 
 
 def microwave_drive(
@@ -26,8 +25,7 @@ def microwave_drive(
         operator=charge_op,
         pulse=pulse or pulses.cos_modulation,
         label=label,
-        pulse_shape=pulse_shape
-        or pulse_shapes.gaussian_top,  # Currently here only for convenience
+        pulse_shape=pulse_shape,
     )
 
     drive.set_params(**drive_params)

@@ -9,9 +9,11 @@ import qutip as qtp
 import numpy as np 
 import matplotlib.pyplot as plt
 from scipy import linalg as la
+import cmath
 
 # import pysqkit
 from pysqkit.solvers.solvkit import integrate
+from pysqkit.util.linalg import tensor_prod
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
    
@@ -98,28 +100,37 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN, show = 
     
     
             
-def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
-    ''' both env should have the same size, and the same eigenstates'''
+def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
+    '''both env should have the same size, and the same eigenstates
+        The U_ideal should match the size of the env_real and the correc output should be compatible'''
     
     if labels_chi_1 == "comp_states":
         labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
         
     ind_chi_1 = [env_real._label_to_index(label) for label in labels_chi_1]
     
-    lambda_real = env_real.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
-    lambda_ideal = env_ideal.fct_to_lambda(in_labels = "comp_states", out_labels = "comp_states", draw_lambda = False, as_qobj = False)
+    lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
+    
+    U_correc = correc(lambda_real)
+    U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+     
+    env_ideal = TomoEnv(definition_type = 'U',
+                        nb_levels = env_real.nb_levels,
+                        param_syst = {'U' : U_ideal_correc},
+                        table_states = env_real._table_states)
+    lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
     assert lambda_real.shape == lambda_ideal.shape
     
-    lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
-
+    # lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
+    lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
 
     return np.trace(lambda_tilde)/(len(labels_chi_1)**2)
     
-def avg_gate_fid(env_real, env_ideal, labels_chi_1 = "comp_states"):
+def avg_gate_fid(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     d1 = len(labels_chi_1)
     L1 = env_real.L1(labels_chi_1)
-    F_pro = process_fidelity(env_real, env_ideal, labels_chi_1)
+    F_pro = process_fidelity(env_real, U_ideal, correc, labels_chi_1)
     
     return (d1*F_pro + 1 - L1)/(d1 + 1)
     
@@ -131,24 +142,16 @@ def L2_from_scratch(system, labels_chi_1 = "comp_states"):
     env = TomoEnv(system = system)
     return env.L2(labels_chi_1)
     
-def process_fidelity_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+def process_fidelity_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
     env_real = TomoEnv(system = system)
-    env_ideal = TomoEnv(definition_type = 'U',
-                        nb_levels = env_real.nb_levels,
-                        param_syst = {'U' : U_ideal},
-                        table_states = env_real._table_states)
     
-    return process_fidelity(env_real, env_ideal, labels_chi_1)
+    return process_fidelity(env_real, U_ideal, correc, labels_chi_1)
     
     
-def avg_gate_fid_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+def avg_gate_fid_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
     env_real = TomoEnv(system = system)
-    env_ideal = TomoEnv(definition_type = 'U',
-                        nb_levels = env_real.nb_levels,
-                        param_syst = {'U' : U_ideal},
-                        table_states = env_real._table_states)
-    
-    return avg_gate_fid(env_real, env_ideal, labels_chi_1)
+
+    return avg_gate_fid(env_real, U_ideal, correc, labels_chi_1)
     
         
 ##  Tomo env class 
@@ -243,15 +246,24 @@ class TomoEnv:
                 self._param_syst['system'] = system
                 
                 def simu(state_init):
-                    tlist = [drive.params['time'] for qubit in system for drive in qubit.drives][0]#we assume that it is lways the same
+                    tlist = [qubit.drives[drive_key].params['time'] for qubit in system for drive_key in qubit.drives.keys()][0]#we assume that it is lways the same
                     hamil0 = system.hamiltonian(as_qobj=True)
                     
-                    hamil_drive = [drive.hamiltonian(as_qobj=True) for qubit in system for drive in qubit.drives]
-                    pulse_drive = [drive.eval_pulse() for qubit in system for drive in qubit.drives]
+                    hamil_drive = []
+                    pulse_drive = []
+                    
+                    for qubit in system:
+                        if qubit.is_driven:
+                            for label, drive in qubit.drives.items():
+                                hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                                pulse_drive.append(drive.eval_pulse())
                     
                     jump_list = [] #system. ??
                 
+                    # print(tlist)
+                    
                     result = integrate(tlist, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
+            
                     return result.states[-1]
                     
                 self._param_syst['simu'] = simu
@@ -416,7 +428,7 @@ class TomoEnv:
     def _gate_from_U(self, state_init): 
         '''param should contain U which is a 2D numpy array'''
         U = self.param_syst['U']
-        return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
+        return qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]) * state_init * qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]).dag()
         
         
     def _gate_from_simu(self, state_init): 
@@ -605,89 +617,103 @@ class TomoEnv:
 
 ## Fidelities : (with lambda)
 
-    def L1_with_lambda(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
+    def L1_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
         ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
     
         The process is explained in the tomography tutorial      
           
-        If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
-        
-        if inv_ideal_lambda is None :
-            lambda_tilde = lambda_mat
-            
-        else:
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
-            if isinstance(inv_ideal_lambda, qtp.Qobj):
-                inv_ideal_lambda = inv_ideal_lambda.full()
-                
-            assert isinstance(lambda_mat, np.ndarray)
-            assert isinstance(inv_ideal_lambda, np.ndarray)
-            
-            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
+        If U_ideal is None, we take lambda_mat as lambda_tilde'''
+        if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-            
-        
         ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
             
         ind_chi_2 = []
         for k in range(self.d):
             if not (k in ind_chi_1):
                 ind_chi_2.append(k)
+        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
+            
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
         
+        if U_ideal is None :
+            lambda_tilde = lambda_real
+            
+        else:
+            U_correc = correc(lambda_real)
+            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            
+            env_ideal = TomoEnv(definition_type = 'U',
+                                nb_levels = env_real.nb_levels,
+                                param_syst = {'U' : U_ideal_correc},
+                                table_states = env_real._table_states)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+    
+            assert lambda_real.shape == lambda_ideal.shape
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(lambda_ideal, np.ndarray)
+        
+            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
+        
+
+            
+        #now take care of states
         res = 0
-        for i in ind_chi_1:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+        for i in range(len(ind_chi_1)):
+            for j in range(len(ind_chi_2)):
+                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)].real
                 
                 
         return res/len(ind_chi_1)
         
-    def L2_with_lambda(self, lambda_mat, inv_ideal_lambda =  None, labels_chi_1 = None): 
+        
+        
+        
+    def L2_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
         ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
         
         If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
         
-        if inv_ideal_lambda is None :
-            lambda_tilde = lambda_mat
-            
-        else:
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
-            if isinstance(inv_ideal_lambda, qtp.Qobj):
-                inv_ideal_lambda = inv_ideal_lambda.full()
-                
-            assert isinstance(lambda_mat, np.ndarray)
-            assert isinstance(inv_ideal_lambda, np.ndarray)
-            
-            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
+        if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+        ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
             
-        
-        ind_chi_1 = []
-        for tpl in labels_chi_1:
-            ind_chi_1.append(int(  np.sum(
-                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
-                                          )
-                                ))
-                                
         ind_chi_2 = []
         for k in range(self.d):
             if not (k in ind_chi_1):
                 ind_chi_2.append(k)
+        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
+            
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+        
+        if U_ideal is None :
+            lambda_tilde = lambda_real
+            
+        else:
+            U_correc = correc(lambda_real)
+            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            
+            env_ideal = TomoEnv(definition_type = 'U',
+                                nb_levels = env_real.nb_levels,
+                                param_syst = {'U' : U_ideal_correc},
+                                table_states = env_real._table_states)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+    
+            assert lambda_real.shape == lambda_ideal.shape
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(lambda_ideal, np.ndarray)
+        
+            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
         
         res = 0
-        for i in ind_chi_2:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+        for i in range(len(ind_chi_2)):
+            for j in range(len(ind_chi_2)):
+                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)].real
                 
         return  1 - res/len(ind_chi_2)   
         
