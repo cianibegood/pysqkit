@@ -617,89 +617,103 @@ class TomoEnv:
 
 ## Fidelities : (with lambda)
 
-    def L1_with_lambda(self, lambda_mat, inv_ideal_lambda, labels_chi_1 = None): 
+    def L1_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
         ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
     
         The process is explained in the tomography tutorial      
           
-        If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
-        
-        if inv_ideal_lambda is None :
-            lambda_tilde = lambda_mat
-            
-        else:
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
-            if isinstance(inv_ideal_lambda, qtp.Qobj):
-                inv_ideal_lambda = inv_ideal_lambda.full()
-                
-            assert isinstance(lambda_mat, np.ndarray)
-            assert isinstance(inv_ideal_lambda, np.ndarray)
-            
-            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
+        If U_ideal is None, we take lambda_mat as lambda_tilde'''
+        if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-            
-        
         ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
             
         ind_chi_2 = []
         for k in range(self.d):
             if not (k in ind_chi_1):
                 ind_chi_2.append(k)
+        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
+            
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
         
+        if U_ideal is None :
+            lambda_tilde = lambda_real
+            
+        else:
+            U_correc = correc(lambda_real)
+            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            
+            env_ideal = TomoEnv(definition_type = 'U',
+                                nb_levels = env_real.nb_levels,
+                                param_syst = {'U' : U_ideal_correc},
+                                table_states = env_real._table_states)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+    
+            assert lambda_real.shape == lambda_ideal.shape
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(lambda_ideal, np.ndarray)
+        
+            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
+        
+
+            
+        #now take care of states
         res = 0
-        for i in ind_chi_1:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+        for i in range(len(ind_chi_1)):
+            for j in range(len(ind_chi_2)):
+                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)].real
                 
                 
         return res/len(ind_chi_1)
         
-    def L2_with_lambda(self, lambda_mat, inv_ideal_lambda =  None, labels_chi_1 = None): 
+        
+        
+        
+    def L2_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
         ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
         
         If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
         
-        if inv_ideal_lambda is None :
-            lambda_tilde = lambda_mat
-            
-        else:
-            if isinstance(lambda_mat, qtp.Qobj):
-                lambda_mat = lambda_mat.full()
-            if isinstance(inv_ideal_lambda, qtp.Qobj):
-                inv_ideal_lambda = inv_ideal_lambda.full()
-                
-            assert isinstance(lambda_mat, np.ndarray)
-            assert isinstance(inv_ideal_lambda, np.ndarray)
-            
-            lambda_tilde = inv_ideal_lambda.dot(lambda_mat)
-        
-        #list of indices of states in table states in chi1 and chi2
-        #if arg ind_chi_1 is None, we take the 00, 01, 10, 11
-        if labels_chi_1 is None:
+        if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+        ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
             
-        
-        ind_chi_1 = []
-        for tpl in labels_chi_1:
-            ind_chi_1.append(int(  np.sum(
-                            [tpl[i]*np.prod(self.nb_levels[:i]) for i in range(len(self.nb_levels))]
-                                          )
-                                ))
-                                
         ind_chi_2 = []
         for k in range(self.d):
             if not (k in ind_chi_1):
                 ind_chi_2.append(k)
+        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
+            
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+        
+        if U_ideal is None :
+            lambda_tilde = lambda_real
+            
+        else:
+            U_correc = correc(lambda_real)
+            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            
+            env_ideal = TomoEnv(definition_type = 'U',
+                                nb_levels = env_real.nb_levels,
+                                param_syst = {'U' : U_ideal_correc},
+                                table_states = env_real._table_states)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+    
+            assert lambda_real.shape == lambda_ideal.shape
+            if isinstance(lambda_mat, qtp.Qobj):
+                lambda_mat = lambda_mat.full()
+                
+            assert isinstance(lambda_mat, np.ndarray)
+            assert isinstance(lambda_ideal, np.ndarray)
+        
+            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
         
         res = 0
-        for i in ind_chi_2:
-            for j in ind_chi_2:
-                res += lambda_tilde[i+i*self.d , j + j*self.d].real
+        for i in range(len(ind_chi_2)):
+            for j in range(len(ind_chi_2)):
+                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)].real
                 
         return  1 - res/len(ind_chi_2)   
         
