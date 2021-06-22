@@ -1,4 +1,4 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Tuple
 from copy import copy
 from warnings import warn
 
@@ -8,6 +8,8 @@ from qutip import Qobj
 
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
+from ..util.linalg import get_mat_elem
+from ..util.phys import average_photon
 
 _supported_bases = (FockBasis,)
 
@@ -233,6 +235,7 @@ class SimpleTransmon(Qubit):
             anharm = -anharm
         self._anharm = anharm
         self._ext_flux = ext_flux
+        self._ec = np.abs(self._anharm)
 
         if basis is None:
             basis = fock_basis(dim_hilbert)
@@ -416,3 +419,99 @@ class SimpleTransmon(Qubit):
             basis=basis,
             dim_hilbert=dim_hilbert,
         )
+    def dielectric_rates(
+        self, 
+        level_k: int, 
+        level_m: int, 
+        qdiel: float, 
+        beta: float, 
+        return_op=False
+    ) -> Tuple[float, float]:
+        if qdiel < 0 or beta < 0:
+            raise ValueError(
+                "Quality factor qdiel and (absolute) "
+                "inverse temperature beta must be positive."
+            )
+
+        if level_k == level_m:
+            raise ValueError(
+                "Eigenstate labels level_k and level_m " "must be different."
+            )
+
+        if level_k < 0 or level_m < 0:
+            raise ValueError(
+                "Eigenstate labels level_k and level_m must " "be positive."
+            )
+        elif level_k >= self.dim_hilbert or level_m >= self.dim_hilbert:
+            raise ValueError(
+                "Eigenstate labels k and m must be smaller than"
+                " the Hilbert space dimension."
+            )
+
+        if level_k > level_m:
+            level_k, level_m = level_m, level_k
+
+        eig_en, eig_vec = self.eig_states([level_k, level_m])
+        energy_diff = (eig_en[1] - eig_en[0]) / self._ec
+        phi_km = get_mat_elem(self.flux_op(), eig_vec[1], eig_vec[0])
+
+        gamma = self._ec * 1 / (4 * qdiel) * energy_diff ** 2 * np.abs(phi_km) ** 2
+        nth = average_photon(energy_diff * self._ec, beta)
+
+        relaxation_rate = gamma * (nth + 1)
+        excitation_rate = gamma * nth
+
+        if return_op:
+            down_op = np.outer(eig_vec[0], np.conj(eig_vec[1]))
+            return relaxation_rate, excitation_rate, down_op
+
+        return relaxation_rate, excitation_rate, gamma
+
+    def _get_dielectric_jump(
+        self, level_k: int, level_m: int, qdiel: float, beta: float
+    ) -> Tuple[np.ndarray]:
+
+        relaxation_rate, excitation_rate, down_op = self.dielectric_rates(
+            level_k, level_m, qdiel, beta, return_op=True
+        )
+
+        up_op = down_op.conj().T
+
+        jump_down = np.sqrt(relaxation_rate) * down_op
+        jump_up = np.sqrt(excitation_rate) * up_op
+
+        return jump_down, jump_up
+
+    def dielectric_jump(
+        self, level_k: int, level_m: int, qdiel: float, beta: float, as_qobj=False
+    ) -> Tuple[np.ndarray]:
+        jump_down, jump_up = self._get_dielectric_jump(level_k, level_m, qdiel, beta)
+        if as_qobj:
+            dim = self.dim_hilbert
+            jump_down_qobj = Qobj(
+                inpt=jump_down,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type="oper",
+                isherm=True,
+            )
+            jump_up_qobj = Qobj(
+                inpt=jump_up,
+                dims=[[dim], [dim]],
+                shape=[dim, dim],
+                type="oper",
+                isherm=True,
+            )
+            return jump_down_qobj, jump_up_qobj
+        return jump_down, jump_up
+
+    def dielectric_loss(
+        self, qdiel: float, beta: float, as_qobj=False
+    ) -> List[np.ndarray]:
+        jump_list = []
+        for level_k in range(0, self.dim_hilbert):
+            for level_m in range(level_k + 1, self.dim_hilbert):
+                jump_list.extend(
+                    self.dielectric_jump(level_k, level_m, qdiel, beta, as_qobj)
+                )
+        return jump_list

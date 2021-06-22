@@ -277,7 +277,12 @@ class Fluxonium(Qubit):
         return dataset
 
     def dielectric_rates(
-        self, level_k: int, level_m: int, qdiel: float, beta: float, return_op=False
+        self, 
+        level_k: int, 
+        level_m: int, 
+        qdiel: float, 
+        beta: float, 
+        return_op=False
     ) -> Tuple[float, float]:
         if qdiel < 0 or beta < 0:
             raise ValueError(
@@ -317,7 +322,7 @@ class Fluxonium(Qubit):
             down_op = np.outer(eig_vec[0], np.conj(eig_vec[1]))
             return relaxation_rate, excitation_rate, down_op
 
-        return relaxation_rate, excitation_rate
+        return relaxation_rate, excitation_rate, gamma
 
     def _get_dielectric_jump(
         self, level_k: int, level_m: int, qdiel: float, beta: float
