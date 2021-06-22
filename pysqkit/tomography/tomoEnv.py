@@ -9,9 +9,11 @@ import qutip as qtp
 import numpy as np 
 import matplotlib.pyplot as plt
 from scipy import linalg as la
+import cmath
 
 # import pysqkit
 from pysqkit.solvers.solvkit import integrate
+from pysqkit.util.linalg import tensor_prod
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
    
@@ -98,8 +100,9 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN, show = 
     
     
             
-def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
-    ''' both env should have the same size, and the same eigenstates'''
+def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
+    '''both env should have the same size, and the same eigenstates
+        The U_ideal should match the size of the env_real and the correc output should be compatible'''
     
     if labels_chi_1 == "comp_states":
         labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
@@ -107,6 +110,14 @@ def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
     ind_chi_1 = [env_real._label_to_index(label) for label in labels_chi_1]
     
     lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
+    
+    U_correc = correc(lambda_real)
+    U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+     
+    env_ideal = TomoEnv(definition_type = 'U',
+                        nb_levels = env_real.nb_levels,
+                        param_syst = {'U' : U_ideal_correc},
+                        table_states = env_real._table_states)
     lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
     assert lambda_real.shape == lambda_ideal.shape
@@ -116,10 +127,10 @@ def process_fidelity(env_real, env_ideal, labels_chi_1 = "comp_states"):
 
     return np.trace(lambda_tilde)/(len(labels_chi_1)**2)
     
-def avg_gate_fid(env_real, env_ideal, labels_chi_1 = "comp_states"):
+def avg_gate_fid(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     d1 = len(labels_chi_1)
     L1 = env_real.L1(labels_chi_1)
-    F_pro = process_fidelity(env_real, env_ideal, labels_chi_1)
+    F_pro = process_fidelity(env_real, U_ideal, correc, labels_chi_1)
     
     return (d1*F_pro + 1 - L1)/(d1 + 1)
     
@@ -131,24 +142,16 @@ def L2_from_scratch(system, labels_chi_1 = "comp_states"):
     env = TomoEnv(system = system)
     return env.L2(labels_chi_1)
     
-def process_fidelity_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+def process_fidelity_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
     env_real = TomoEnv(system = system)
-    env_ideal = TomoEnv(definition_type = 'U',
-                        nb_levels = env_real.nb_levels,
-                        param_syst = {'U' : U_ideal},
-                        table_states = env_real._table_states)
     
-    return process_fidelity(env_real, env_ideal, labels_chi_1)
+    return process_fidelity(env_real, U_ideal, correc, labels_chi_1)
     
     
-def avg_gate_fid_from_scratch(system, U_ideal, labels_chi_1 = "comp_states"):
+def avg_gate_fid_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
     env_real = TomoEnv(system = system)
-    env_ideal = TomoEnv(definition_type = 'U',
-                        nb_levels = env_real.nb_levels,
-                        param_syst = {'U' : U_ideal},
-                        table_states = env_real._table_states)
-    
-    return avg_gate_fid(env_real, env_ideal, labels_chi_1)
+
+    return avg_gate_fid(env_real, U_ideal, correc, labels_chi_1)
     
         
 ##  Tomo env class 
@@ -425,7 +428,7 @@ class TomoEnv:
     def _gate_from_U(self, state_init): 
         '''param should contain U which is a 2D numpy array'''
         U = self.param_syst['U']
-        return qtp.Qobj(U) * state_init * qtp.Qobj(U).dag()
+        return qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]) * state_init * qtp.Qobj(U, dims = [self.nb_levels, self.nb_levels]).dag()
         
         
     def _gate_from_simu(self, state_init): 
