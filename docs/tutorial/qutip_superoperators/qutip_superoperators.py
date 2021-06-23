@@ -7,7 +7,7 @@ import qutip as qtp
 one qubit. The convention is that the operator op acts on 
 another operator a as op*a*op.dag(). Also the convention is 
 to order the operators by columns. This is because qutip defines 
-the sigma_plus operators in the "quantum optics way""""
+the sigma_plus operators in the "quantum optics way"""
 
 op = qtp.qobj.Qobj(np.array([[0, 2j], [3 -4j, 0]]))
 # op = qtp.qobj.Qobj(np.array([[0, 10], [2, 0]]))
@@ -34,8 +34,12 @@ transfer matrix associated with the operator...looking at
 the source code it is implemented only for qubits which is a big 
 limitation. """
 
-
-
+# %%
+""" Let us now try with a multiqubit operator """
+pippo = np.array([[2, 4], [3, 20]])
+pluto = np.array([[18, 2], [1, 0]])
+op2q = qtp.tensor(qtp.qobj.Qobj(pippo), qtp.qobj.Qobj(pluto))
+op2q_sup = qtp.to_super(op2q)
 
 
 # %%
