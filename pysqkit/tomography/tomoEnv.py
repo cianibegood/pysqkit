@@ -102,6 +102,9 @@ def draw_mat_mult(mat_list, mat_name_list, vmin = np.NaN, vmax = np.NaN, show = 
             
 def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     '''both env should have the same size, and the same eigenstates
+    
+    correc returns the correction that needs to be operated onto U_ideal. It takes env_real as argument
+    
         The U_ideal should match the size of the env_real and the correc output should be compatible'''
     
     if labels_chi_1 == "comp_states":
@@ -111,7 +114,7 @@ def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     
     lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
-    U_correc = correc(lambda_real, env_real.nb_levels)
+    U_correc = correc(env_real)
     U_ideal_correc = U_correc.conj().T.dot(U_ideal)
      
     env_ideal = TomoEnv(definition_type = 'U',
@@ -164,7 +167,8 @@ class TomoEnv:
         definition_type: str = None,
         nb_levels: Union[int, Iterable[int]] = None ,
         param_syst = None,
-        table_states = None):
+        table_states = None,
+        jump_op = []):
             '''  Either system is not None and it's all we need OR system is None and all the rest must be defined
             
             table_states is None if we want to take the bare basis'''
@@ -258,7 +262,7 @@ class TomoEnv:
                                 hamil_drive.append(drive.hamiltonian(as_qobj=True))
                                 pulse_drive.append(drive.eval_pulse())
                     
-                    jump_list = []#[qubit.dielectric_loss() for qubit in system.qubits]
+                    jump_list = jump_op #[qubit.dielectric_loss() for qubit in system.qubits]
                     
                     result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
                     
@@ -636,20 +640,20 @@ class TomoEnv:
                 ind_chi_2.append(k)
         labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
             
-        lambda_real = self.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
         
         if U_ideal is None :
             lambda_tilde = lambda_real
             
         else:
-            U_correc = correc(lambda_real, self.nb_levels)
-            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            correction_U = correc(self)
+            U_ideal_corrected = correction_U.conj().T.dot(U_ideal)
             
             env_ideal = TomoEnv(definition_type = 'U',
                                 nb_levels = self.nb_levels,
-                                param_syst = {'U' : U_ideal_correc},
+                                param_syst = {'U' : U_ideal_corrected},
                                 table_states = self._table_states)
-            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
             assert lambda_real.shape == lambda_ideal.shape
                 
@@ -663,12 +667,12 @@ class TomoEnv:
         #now take care of states
         res = 0
         for i in range(len(ind_chi_1)):
-            for j in range(len(ind_chi_2)):
-                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)]                   
+            for j in range(len(ind_chi_1)):
+                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_1)]                   
                 #np.abs(lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)])
                 
                 
-        return res/len(ind_chi_1)
+        return 1 - res/len(ind_chi_1)
         
         
         
@@ -688,20 +692,20 @@ class TomoEnv:
                 ind_chi_2.append(k)
         labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
             
-        lambda_real = self.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+        lambda_real = self.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
         
         if U_ideal is None :
             lambda_tilde = lambda_real
             
         else:
-            U_correc = correc(lambda_real, self.nb_levels)
-            U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+            correction_U = correc(self)
+            U_ideal_corrected = correction_U.conj().T.dot(U_ideal)
             
             env_ideal = TomoEnv(definition_type = 'U',
                                 nb_levels = self.nb_levels,
-                                param_syst = {'U' : U_ideal_correc},
+                                param_syst = {'U' : U_ideal_corrected},
                                 table_states = self._table_states)
-            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
             assert lambda_real.shape == lambda_ideal.shape
 
@@ -712,11 +716,11 @@ class TomoEnv:
         
         res = 0
         for i in range(len(ind_chi_2)):
-            for j in range(len(ind_chi_2)):
-                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)]
+            for j in range(len(ind_chi_1)):
+                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_1)]
                 # np.abs(lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)])
                 
-        return  1 - res/len(ind_chi_2)   
+        return  res/len(ind_chi_2)   
         
         
 
