@@ -492,7 +492,7 @@ class TomoEnv:
         
         else :
             print("Error ! \nDefinition type not recognized. \nPossible values are : \
-                    'kraus', 'U', 'simu' ")
+                    'kraus', 'U', '2-qubit simu', '2system' ")
             
 
  
@@ -697,6 +697,7 @@ class TomoEnv:
         if U_ideal is None :
             lambda_tilde = lambda_real
             
+            
         else:
             correction_U = correc(self)
             U_ideal_corrected = correction_U.conj().T.dot(U_ideal)
@@ -705,9 +706,9 @@ class TomoEnv:
                                 nb_levels = self.nb_levels,
                                 param_syst = {'U' : U_ideal_corrected},
                                 table_states = self._table_states)
-            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
+            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
     
-            assert lambda_real.shape == lambda_ideal.shape
+            # assert lambda_real.shape == lambda_ideal.shape
 
             assert isinstance(lambda_real, np.ndarray)
             assert isinstance(lambda_ideal, np.ndarray)
