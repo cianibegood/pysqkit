@@ -111,7 +111,7 @@ def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     
     lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
-    U_correc = correc(lambda_real, self.nb_levels)
+    U_correc = correc(lambda_real, env_real.nb_levels)
     U_ideal_correc = U_correc.conj().T.dot(U_ideal)
      
     env_ideal = TomoEnv(definition_type = 'U',
@@ -258,14 +258,12 @@ class TomoEnv:
                                 hamil_drive.append(drive.hamiltonian(as_qobj=True))
                                 pulse_drive.append(drive.eval_pulse())
                     
-                    jump_list = [] #system. ??
-                
-                    # print(tlist)
+                    jump_list = []#[qubit.dielectric_loss() for qubit in system.qubits]
                     
-                    result = integrate(tlist, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
-            
+                    result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
+                    
                     res = result.states[-1]
-                    return res/np.trace(res.full())
+                    return res #/np.trace(res.full())
                     
                 self._param_syst['simu'] = simu
                     
@@ -423,14 +421,14 @@ class TomoEnv:
             op = qtp.Qobj(op, dims = state_init.dims)
             res+= op*state_init*op.dag()
         
-        return res/np.trace(res.full())
+        return res#"np.trace(res.full())
     
     
     def _gate_from_U(self, state_init): 
         '''param should contain U which is a 2D numpy array'''
         U =  qtp.Qobj(self.param_syst['U'], dims = [self.nb_levels, self.nb_levels])
         res = (U * state_init * U.dag() )
-        return res/np.trace(res.full())
+        return res#/np.trace(res.full())
         
         
     def _gate_from_simu(self, state_init): 
@@ -441,7 +439,7 @@ class TomoEnv:
             
         elif self._definition_type == '2system':
             res =  self.param_syst['simu'](state_init)
-        return res/np.trace(res.full())
+        return res#/np.trace(res.full())
             
     def gate(self, init):
         
