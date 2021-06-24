@@ -425,7 +425,7 @@ class TomoEnv:
             op = qtp.Qobj(op, dims = state_init.dims)
             res+= op*state_init*op.dag()
         
-        return res#"np.trace(res.full())
+        return res#/np.trace(res.full())
     
     
     def _gate_from_U(self, state_init): 
@@ -473,6 +473,9 @@ class TomoEnv:
                 state_init = init
             else:
                 print("Type of the initial state not recognized, if entered as qobj it should be 'oper' or 'ket'")
+            
+        else:
+            print("Type of the initial state not recognized, should be list or qobj")
             
         state_init = state_init.unit() #it's a choice   
         
@@ -583,16 +586,15 @@ class TomoEnv:
         if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
             
-        init = []
-        for label in labels_chi_1:
-            init.append([1/len(labels_chi_1), label])
+        state_init = qtp.Qobj(np.zeros((self.d, self.d)), dims = [self.nb_levels, self.nb_levels])
+        for dm in [self._dm_label(label)/len(labels_chi_1) for label in labels_chi_1]:
+            state_init += dm
         
-        res = self.gate(init)
+        res = self.gate(state_init)
         
         return 1 - np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1])
         
-        # (self._bra_label(label) * res * self._ket_label(label)).full()[0,0] for label in labels_chi_1])
-        
+
     def L2(self, labels_chi_1 = "comp_states"):
         
         if labels_chi_1 == "comp_states":
@@ -608,13 +610,13 @@ class TomoEnv:
             if not (k in ind_chi_1):
                 ind_chi_2.append(k)
                 
-                
-        init = []
-        for ind in ind_chi_2:
-            init.append([1/len(ind_chi_2), ind])
-        
-        res = self.gate(init)
-        
+            
+        state_init = qtp.Qobj(np.zeros((self.d, self.d)), dims = [self.nb_levels, self.nb_levels])
+        for dm in [self._dm_index(ind)/len(ind_chi_2) for ind in ind_chi_2]:
+            state_init += dm
+
+        res = self.gate(state_init)
+
         return np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1]) 
         # np.sum([(self._bra_label(label) * res * self._ket_label(label)).full()[0,0] for label in labels_chi_1])
 
