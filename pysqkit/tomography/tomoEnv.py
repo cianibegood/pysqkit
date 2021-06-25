@@ -114,8 +114,8 @@ def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     
     lambda_real = env_real.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
-    U_correc = correc(env_real)
-    U_ideal_correc = U_correc.conj().T.dot(U_ideal)
+    U_correction = correc(env_real, in_out_labels = labels_chi_1)
+    U_ideal_correc = U_correction.conj().T.dot(U_ideal)
      
     env_ideal = TomoEnv(definition_type = 'U',
                         nb_levels = env_real.nb_levels,
@@ -124,38 +124,139 @@ def process_fidelity(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
     lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
     
     assert lambda_real.shape == lambda_ideal.shape
-    
-    # lambda_tilde = np.linalg.inv(lambda_ideal).dot(lambda_real)
     lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
 
     return np.trace(lambda_tilde)/(len(labels_chi_1)**2)
     
-def avg_gate_fid(env_real, U_ideal, correc, labels_chi_1 = "comp_states"):
-    d1 = len(labels_chi_1)
-    L1 = env_real.L1(labels_chi_1)
-    F_pro = process_fidelity(env_real, U_ideal, correc, labels_chi_1)
+def avg_gate_fid(env_real, U_ideal, correc, labels_chi_1 = "comp_states", use_correc_in_L1 = True, mute = False):
     
+    d1 = len(labels_chi_1)
+    if use_correc_in_L1:
+        L1 = env_real.L1(U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
+    else:
+        L1 = env_real.L1(labels_chi_1 = labels_chi_1)
+        
+    F_pro = process_fidelity(env_real = env_real, U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
+    
+    if not mute :
+        print("We made ", env_real.nb_gate_call, "gate calls")
     return (d1*F_pro + 1 - L1)/(d1 + 1)
     
-def L1_from_scratch(system, labels_chi_1 = "comp_states"):
-    env = TomoEnv(system = system)
-    return env.L1(labels_chi_1)
+def L1_from_scratch(system, U_ideal = None, correc = None, labels_chi_1 = "comp_states", store_outputs = False):
+    env = TomoEnv(system = system, store_outputs = store_outputs)
+    return env.L1(U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
     
-def L2_from_scratch(system, labels_chi_1 = "comp_states"):
-    env = TomoEnv(system = system)
-    return env.L2(labels_chi_1)
+def L2_from_scratch(system, U_ideal = None, correc = None, labels_chi_1 = "comp_states", store_outputs = False):
+    env = TomoEnv(system = system, store_outputs = store_outputs)
+    return env.L2(U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
     
-def process_fidelity_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
-    env_real = TomoEnv(system = system)
+def process_fidelity_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states", store_outputs = False):
+    env_real = TomoEnv(system = system, store_outputs = store_outputs)
     
-    return process_fidelity(env_real, U_ideal, correc, labels_chi_1)
+    return process_fidelity(env_real = env_real, U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
     
     
-def avg_gate_fid_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states"):
-    env_real = TomoEnv(system = system)
+def avg_gate_fid_from_scratch(system, U_ideal, correc, labels_chi_1 = "comp_states", store_outputs = False, use_correc_in_L1 = True, mute = False):
+    env_real = TomoEnv(system = system, store_outputs = store_outputs)
 
-    return avg_gate_fid(env_real, U_ideal, correc, labels_chi_1)
+    return avg_gate_fid(env_real = env_real, U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1, use_correc_in_L1 = use_correc_in_L1, mute = mute)
     
+    
+## Fast versions
+def process_fidelity_fast(env_real, U_ideal, correc, labels_chi_1 = "comp_states", assume_U_id_corrected_is_diag = True, zero_threshold = 1e-8):
+    '''both env should have the same size, and the same eigenstates
+    
+    correc returns the correction that needs to be operated onto U_ideal. It takes env_real as argument
+    
+        The U_ideal should match the size of the env_real and the correc output should be compatible
+        
+        U_ideal should be diagonal'''
+    
+    
+    if labels_chi_1 == "comp_states":
+        labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+    ind_chi_1 = [env_real._label_to_index(label) for label in labels_chi_1]
+    
+    U_correction = correc(env_real, in_out_labels = labels_chi_1)
+    U_ideal_correc = U_correction.conj().T.dot(U_ideal)
+     
+    env_ideal = TomoEnv(definition_type = 'U',
+                        nb_levels = env_real.nb_levels,
+                        param_syst = {'U' : U_ideal_correc},
+                        table_states = env_real._table_states)
+    lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
+    
+    lambda_ideal_conj = lambda_ideal.T.conj()
+    
+    res = 0.j
+    if assume_U_id_corrected_is_diag:
+        for first_ind in range(len(ind_chi_1)):
+            for second_ind in range(len(ind_chi_1)):
+                n = ind_chi_1[first_ind]
+                m = ind_chi_1[second_ind]
+        
+        #the indices are different for the two matrices because the ideal one is only expressed in chi_1 while the other one takes the general indices
+        #Trace of product is : sum over i and k of M_{ik} M'_{ki} = M_{ii} M'_{ii} if one is diagonal
+                if np.abs(lambda_ideal_conj[first_ind*len(ind_chi_1) + second_ind, 
+                                            first_ind*len(ind_chi_1) + second_ind]) > zero_threshold:
+                    res += lambda_ideal_conj[first_ind*len(ind_chi_1) + second_ind, 
+                                                first_ind*len(ind_chi_1) + second_ind] * \
+                            env_real.lambda_as_function(n*env_real.d + m, n*env_real.d + m)
+
+    else :
+        for first_ind_trace in range(len(ind_chi_1)):
+            for second_ind_trace in range(len(ind_chi_1)):
+                for first_ind_prod in range(len(ind_chi_1)):
+                    for second_ind_prod in range(len(ind_chi_1)):
+                        n_trace = ind_chi_1[first_ind_trace]
+                        m_trace = ind_chi_1[second_ind_trace]
+                        
+                        n_prod = ind_chi_1[first_ind_prod]
+                        m_prod = ind_chi_1[second_ind_prod]
+                
+                #the indices are different for the two matrices because the ideal one is only expressed in chi_1 while the other one takes the general indices
+                #Trace of product is : sum over i and k of M_{ik} M'_{ki}
+                if np.abs(lambda_ideal_conj[first_ind_trace*len(ind_chi_1) + second_ind_trace, 
+                                                    first_ind_prod*len(ind_chi_1) + second_ind_prod]) > zero_threshold:
+                            res += lambda_ideal_conj[first_ind_trace*len(ind_chi_1) + second_ind_trace, 
+                                                    first_ind_prod*len(ind_chi_1) + second_ind_prod] * \
+                                    env_real.lambda_as_function(n_prod*env_real.d + m_prod, n_trace*env_real.d + m_trace)
+
+    return res/(len(labels_chi_1)**2)
+    
+def avg_gate_fid_fast(env_real, U_ideal, correc, labels_chi_1 = "comp_states", use_correc_in_L1 = True, mute = False, assume_U_id_corrected_is_diag = True, zero_threshold = 1e-8):
+    
+    d1 = len(labels_chi_1)
+    if use_correc_in_L1:
+        L1 = env_real.L1(U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1)
+    else:
+        L1 = env_real.L1(labels_chi_1 = labels_chi_1)
+        
+    F_pro = process_fidelity_fast(env_real = env_real, U_ideal = U_ideal, correc = correc, labels_chi_1 = labels_chi_1, assume_U_id_corrected_is_diag = assume_U_id_corrected_is_diag, zero_threshold = zero_threshold)
+    if not mute :
+        print("We made ", env_real.nb_gate_call, "gate calls")
+    return (d1*F_pro + 1 - L1)/(d1 + 1)
+    
+def process_fidelity_from_scratch_fast(system, U_ideal, correc, labels_chi_1 = "comp_states", store_outputs = True, assume_U_id_corrected_is_diag = True, zero_threshold = 1e-8):
+    env_real = TomoEnv(system = system, store_outputs = store_outputs)
+    
+    return process_fidelity_fast(env_real = env_real, U_ideal = U_ideal, correc = correc, 
+                                    labels_chi_1 = labels_chi_1, 
+                                    assume_U_id_corrected_is_diag = assume_U_id_corrected_is_diag,
+                                    zero_threshold = zero_threshold)
+    
+    
+def avg_gate_fid_from_scratch_fast(system, U_ideal, correc, labels_chi_1 = "comp_states", store_outputs = True, mute = False, assume_U_id_corrected_is_diag = True, use_correc_in_L1 = True, zero_threshold = 1e-8):
+    env_real = TomoEnv(system = system, store_outputs = store_outputs)
+    
+    return avg_gate_fid_fast(env_real = env_real, U_ideal = U_ideal, correc = correc, 
+                            labels_chi_1 = labels_chi_1, 
+                            assume_U_id_corrected_is_diag = assume_U_id_corrected_is_diag,
+                            mute = mute,
+                            zero_threshold = zero_threshold,
+                            use_correc_in_L1 = use_correc_in_L1)
+
+
         
 ##  Tomo env class 
     
@@ -168,10 +269,14 @@ class TomoEnv:
         nb_levels: Union[int, Iterable[int]] = None ,
         param_syst = None,
         table_states = None,
-        jump_op = []):
+        jump_op = [],
+        store_outputs = False):
             '''  Either system is not None and it's all we need OR system is None and all the rest must be defined
             
             table_states is None if we want to take the bare basis'''
+            
+            self.store_outputs = store_outputs
+            self.nb_gate_call = 0
             
             if system is None: #old method
             
@@ -181,7 +286,7 @@ class TomoEnv:
                 
                 
                 #def type
-                assert definition_type in ['U', 'kraus', '2-qubit simu']
+                assert definition_type in ['U', 'kraus'] #'2-qubit simu']
                 self._definition_type = definition_type
                 
                 #nb_levels and d
@@ -196,6 +301,7 @@ class TomoEnv:
                     assert hasattr(param_syst['U'], 'shape') \
                             and (param_syst['U'].shape[0] == self._d) \
                             and (param_syst['U'].shape[1] == self._d)
+                    self._carac = param_syst['U']
                             
                 elif self._definition_type == 'kraus':
                     assert 'op_list' in param_syst.keys()
@@ -204,23 +310,24 @@ class TomoEnv:
                         assert hasattr(op, 'shape') \
                                 and (op.shape[0] == self._d) \
                                 and (op.shape[1] == self._d)
+                    self._carac = param_syst['op_list']
                 
-                elif self._definition_type == '2-qubit simu':
-                    assert 'qb1' in param_syst.keys()
-                    assert 'qb2' in param_syst.keys()
-                    assert 'jc' in param_syst.keys()
-                    
-                    # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
-                    # table_states = param_syst['get_state_basis'](param_syst)
-                    
-                    # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
-                    # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
-                    # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
-                    # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
-                    
-                    assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
-                    #the simu one takes an initial state (of type qobj) and param_syst
-                    
+                # elif self._definition_type == '2-qubit simu':
+                #     assert 'qb1' in param_syst.keys()
+                #     assert 'qb2' in param_syst.keys()
+                #     assert 'jc' in param_syst.keys()
+                #     
+                #     # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
+                #     # table_states = param_syst['get_state_basis'](param_syst)
+                #     
+                #     # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
+                #     # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
+                #     # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
+                #     # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
+                #     
+                #     assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
+                #     #the simu one takes an initial state (of type qobj) and param_syst
+                
                     
                     
                 self._param_syst = param_syst 
@@ -237,14 +344,18 @@ class TomoEnv:
 
 
 
-            else : #def from system, only system will be taken into consideration
+            else : #def from system, only system and table states if not none will be taken into consideration
             #for now only deals with 2 qubit systems
                 self._nb_levels = [qubit.dim_hilbert for qubit in system.qubits]
                 self._d = int(np.prod(self._nb_levels))
                 self._definition_type = '2system'
+                self._carac = system
                 
                 #table_states
-                self._table_states = [system.state(_n_th(self._nb_levels, n), as_qobj = True)[1] for n in range(self._d)] 
+                if table_states is None:
+                    self._table_states = [system.state(_n_th(self._nb_levels, n), as_qobj = True)[1] for n in range(self._d)] 
+                else:
+                    self._table_states = table_states
                 
                 self._param_syst =  {}
                 self._param_syst['system'] = system
@@ -284,6 +395,14 @@ class TomoEnv:
     @property
     def param_syst(self):
         return self._param_syst
+        
+    @property
+    def carac(self): #what characterizes the env
+        return self._carac
+        
+    @property
+    def definition_type(self):
+        return self._definition_type
         
     # @property
     # def table_states(self):
@@ -447,6 +566,16 @@ class TomoEnv:
             
     def gate(self, init):
         
+        if self.store_outputs and isinstance(init, list):
+            key = "output"
+            if self.definition_type == "2system":
+                key += str(hash(self.carac))
+            key += str(np.sort(init))
+                
+            if key in self.param_syst.keys(): #if already processed
+                # print("Used stored for output")
+                return self.param_syst[key]
+            
         if isinstance(init, list): #definition via index or label and prefactors
             ket_init = qtp.Qobj(np.zeros((self.d, 1)), dims =  [self.nb_levels, [1,1]])
             for tpl in init:
@@ -482,20 +611,26 @@ class TomoEnv:
         
         #now the different possible cases
         if self._definition_type == 'kraus':
-            return self._gate_from_Kraus(state_init)
+            res = self._gate_from_Kraus(state_init)
             
         elif self._definition_type == 'U':
-            return self._gate_from_U(state_init)
+            res = self._gate_from_U(state_init)
         
         elif self._definition_type == '2-qubit simu':
-            return self._gate_from_simu(state_init)
+            res = self._gate_from_simu(state_init)
             
         elif self._definition_type == '2system':
-            return self._gate_from_simu(state_init)
+            res = self._gate_from_simu(state_init)
         
         else :
-            print("Error ! \nDefinition type not recognized. \nPossible values are : \
+            raise("Error ! \nDefinition type not recognized. \nPossible values are : \
                     'kraus', 'U', '2-qubit simu', '2system' ")
+                    
+        if self.store_outputs and isinstance(init, list):
+            self.param_syst[key] = res
+        self.nb_gate_call +=1 
+        return res
+            
             
 
  
@@ -528,13 +663,31 @@ class TomoEnv:
             assert len(lbl) == len(self.nb_levels)
             
             
-        #now transform ito lists of indices
+        #now transform into lists of indices
         in_ind = []
         out_ind = []
         for lbl in in_labels:
             in_ind.append(self._label_to_index(lbl))
         for lbl in out_labels:
-            out_ind.append(self._label_to_index(lbl))        
+            out_ind.append(self._label_to_index(lbl))
+            
+        
+        #trick to avoid redundant calculations
+        key = "lambda"
+        if self.definition_type == "2system":
+            key += str(hash(self.carac))
+        key += str(np.sort(in_ind))
+        key += str(np.sort(out_ind))
+        
+        if key in self.param_syst.keys(): #if already processed
+            lambda_mat = self.param_syst[key]
+            # print("Used stored for lambda")
+            if draw_lambda:
+                draw_mat(lambda_mat, "\lambda")  
+            if as_qobj:
+                return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) 
+            else:
+                return lambda_mat
 
             
         #function to calculate rho_primes
@@ -568,166 +721,164 @@ class TomoEnv:
                 lambda_mat[i,j] = np.trace(rho_prime_i.full().dot(
                                                 self._rho_nm(out_ind[n_j], out_ind[m_j]).dag().full())  
                                         )
-                
+                                        
+        #once processed, we save it for later (part of trick from above)
+        self._param_syst[key] = lambda_mat
+        
+        
         if draw_lambda:
             draw_mat(lambda_mat, "\lambda")  
         
         if as_qobj:
-            return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) #?
+            return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) 
         else:
             return lambda_mat
             
-            
-## Fidelities efficiently
 
-    def L1(self, labels_chi_1 = "comp_states"):
+    def lambda_as_function(self, in_ind, out_ind):
+        
+        #saving trick
+        key = "lambda_coef"
+        if self.definition_type == "2system":
+            key += str(hash(self.carac))
+        key += str(in_ind)
+        key += str(out_ind)
+        
+        if key in self.param_syst.keys(): #if already processed
+            # print("Used stored for lambda_coef")
+            return self.param_syst[key]
+        
+        n_in, m_in = _n_th([self.d, self.d], in_ind)
+        n_out, m_out = _n_th([self.d, self.d], out_ind)
+        
+        
+        if n_in == m_in:
+            output = self.gate([[1, n_in]])
+        else :
+            n_n_prime = self.gate([[1, n_in]])
+            m_m_prime = self.gate([[1, m_in]])
+            plus_plus_prime = self.gate([[1/np.sqrt(2), n_in], [1/np.sqrt(2), m_in]])
+            minus_minus_prime = self.gate([[1/np.sqrt(2), n_in], [1j/np.sqrt(2), m_in]])
+            
+            output = plus_plus_prime + 1j*minus_minus_prime - (1+1j)/2 * n_n_prime - (1+1j)/2 * m_m_prime
+    
+       
+        coef = np.trace( output.full().dot(self._rho_nm(n_out, m_out).dag().full()) )
+        
+        self._param_syst[key] = coef
+        return coef
+        
+        
+        
+        
+## Leakage and Seepage 
+
+    def L1(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"):
         '''default as 'comp_states' ie 00, 01, 10, 11'''
         
+         
         if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
+            
+        #trick to avoid redundant calculations
+        key = "L1"
+        if self.definition_type == "2system":
+            key += str(hash(self.carac))
+        key += str(hash(str(U_ideal)))
+        key += str(hash(correc))
+        key += str(np.sort(labels_chi_1))
+
+        if key in self.param_syst.keys(): #if already processed
+            # print("Used stored for L1")
+            return self.param_syst[key]
+        
+            
             
         state_init = qtp.Qobj(np.zeros((self.d, self.d)), dims = [self.nb_levels, self.nb_levels])
         for dm in [self._dm_label(label)/len(labels_chi_1) for label in labels_chi_1]:
             state_init += dm
         
-        res = self.gate(state_init)
+        if U_ideal is None:
+            res = self.gate(state_init)
         
-        return 1 - np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1])
+        else :
+            assert U_ideal.shape == (self.d, self.d)
+            proj1_dm_prime = self.gate(state_init)
+            
+            U_correction = correc(self, in_out_labels = labels_chi_1)
+            assert U_correction.shape == (self.d, self.d)
+            U_ideal_corrected = U_correction.conj().T.dot(U_ideal)
+            env_U_ideal_corrected_dag = TomoEnv(system = None,
+                                                definition_type = "U",
+                                                nb_levels = self.nb_levels, 
+                                                param_syst = { 'U' : U_ideal_corrected.conj().T}, 
+                                                table_states = self._table_states)
+                                                            
+            res = env_U_ideal_corrected_dag.gate(proj1_dm_prime)
+            res = res/np.trace(res.full()) #proved useful
+        
+        L1 = 1 - np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1])
+        
+        #once processed, we save it for later (part of trick from above)
+        self._param_syst[key] = L1
+
+            
+        return L1
         
 
-    def L2(self, labels_chi_1 = "comp_states"):
+    def L2(self,  U_ideal = None, correc = None, labels_chi_1 = "comp_states"):
         
         if labels_chi_1 == "comp_states":
             labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-            
-        #work out ind_chi_2
-        ind_chi_1 = []
-        for lbl in labels_chi_1:
-            ind_chi_1.append(self._label_to_index(lbl))
-            
+        ind_chi_1 = [self._label_to_index(label) for label in labels_chi_1]
         ind_chi_2 = []
         for k in range(self.d):
-            if not (k in ind_chi_1):
+            if not k in ind_chi_1:
                 ind_chi_2.append(k)
                 
+        #trick to avoid redundant calculations
+        key = "L2"
+        if self.definition_type == "2system":
+            key += str(hash(self.carac))
+        key += str(hash(str(U_ideal)))
+        key += str(hash(correc))
+        key += str(np.sort(labels_chi_1))
+        
+        if key in self.param_syst.keys(): #if already processed
+            # print("Used stored for L2")
+            return self.param_syst[key]
             
         state_init = qtp.Qobj(np.zeros((self.d, self.d)), dims = [self.nb_levels, self.nb_levels])
         for dm in [self._dm_index(ind)/len(ind_chi_2) for ind in ind_chi_2]:
             state_init += dm
-
-        res = self.gate(state_init)
-
-        return np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1]) 
-        # np.sum([(self._bra_label(label) * res * self._ket_label(label)).full()[0,0] for label in labels_chi_1])
-
+            
+            
+        if U_ideal is None:
+            res = self.gate(state_init)
         
+        else :
+            assert U_ideal.shape == (self.d, self.d)
+            proj2_dm_prime = self.gate(state_init)
+            
+            U_correction = correc(self, in_out_labels = labels_chi_1)
+            assert U_correction.shape == (self.d, self.d)
+            U_ideal_corrected = U_correction.conj().T.dot(U_ideal)
+            env_U_ideal_corrected_dag = TomoEnv(system = None,
+                                                definition_type = "U",
+                                                nb_levels = self.nb_levels, 
+                                                param_syst = { 'U' : U_ideal_corrected.conj().T}, 
+                                                table_states = self._table_states)
+                                                                    
+            res = env_U_ideal_corrected_dag.gate(proj2_dm_prime)
+            res = res/np.trace(res.full()) #proved useful
+            
+        L2 = np.sum([np.trace((self._dm_label(label) * res).full()) for label in labels_chi_1]) 
         
+        #once processed, we save it for later (part of trick from above)
+        self._param_syst[key] = L2
 
-
-## Fidelities : (with lambda)
-
-    def L1_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
-        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
+        return L2
     
-        The process is explained in the tomography tutorial      
-          
-        If U_ideal is None, we take lambda_mat as lambda_tilde'''
-        if labels_chi_1 == "comp_states":
-            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-        ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
-            
-        ind_chi_2 = []
-        for k in range(self.d):
-            if not (k in ind_chi_1):
-                ind_chi_2.append(k)
-        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
-            
-        lambda_real = self.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
-        
-        if U_ideal is None :
-            lambda_tilde = lambda_real
-            
-        else:
-            correction_U = correc(self)
-            U_ideal_corrected = correction_U.conj().T.dot(U_ideal)
-            
-            env_ideal = TomoEnv(definition_type = 'U',
-                                nb_levels = self.nb_levels,
-                                param_syst = {'U' : U_ideal_corrected},
-                                table_states = self._table_states)
-            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_1, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
-    
-            assert lambda_real.shape == lambda_ideal.shape
-                
-            assert isinstance(lambda_real, np.ndarray)
-            assert isinstance(lambda_ideal, np.ndarray)
-        
-            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
-        
-
-            
-        #now take care of states
-        res = 0
-        for i in range(len(ind_chi_1)):
-            for j in range(len(ind_chi_1)):
-                res += lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_1)]                   
-                #np.abs(lambda_tilde[i+i*len(ind_chi_1) , j + j*len(ind_chi_2)])
-                
-                
-        return 1 - res/len(ind_chi_1)
-        
-        
-        
-        
-    def L2_with_lambda(self, U_ideal = None, correc = None, labels_chi_1 = "comp_states"): 
-        ''' We use the formulae from Wood Gambetta with E which is def as such : gate = gate_ideal o E
-        
-        If inv_ideal_lambda is None, we take lambda_mat as lambda_tilde'''
-        
-        if labels_chi_1 == "comp_states":
-            labels_chi_1 = [(0,0), (0,1), (1,0), (1,1)]
-        ind_chi_1 = [self._label_to_index(lbl) for lbl in labels_chi_1]
-            
-        ind_chi_2 = []
-        for k in range(self.d):
-            if not (k in ind_chi_1):
-                ind_chi_2.append(k)
-        labels_chi_2 = [self._index_to_label(k) for k in ind_chi_2]
-            
-        lambda_real = self.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_1, draw_lambda = False, as_qobj = False)
-        
-        if U_ideal is None :
-            lambda_tilde = lambda_real
-            
-            
-        else:
-            correction_U = correc(self)
-            U_ideal_corrected = correction_U.conj().T.dot(U_ideal)
-            
-            env_ideal = TomoEnv(definition_type = 'U',
-                                nb_levels = self.nb_levels,
-                                param_syst = {'U' : U_ideal_corrected},
-                                table_states = self._table_states)
-            lambda_ideal = env_ideal.fct_to_lambda(in_labels = labels_chi_2, out_labels = labels_chi_2, draw_lambda = False, as_qobj = False)
-    
-            # assert lambda_real.shape == lambda_ideal.shape
-
-            assert isinstance(lambda_real, np.ndarray)
-            assert isinstance(lambda_ideal, np.ndarray)
-        
-            lambda_tilde = lambda_ideal.T.conj().dot(lambda_real)
-        
-        res = 0
-        for i in range(len(ind_chi_2)):
-            for j in range(len(ind_chi_1)):
-                res += lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_1)]
-                # np.abs(lambda_tilde[i+i*len(ind_chi_2) , j + j*len(ind_chi_2)])
-                
-        return  res/len(ind_chi_2)   
-        
-        
-
-        
 
 ###Not needed
 #fct_to_PTM
