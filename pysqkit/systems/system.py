@@ -787,12 +787,14 @@ class QubitSystem:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
+
     def state_index(
         self,
         label: str,
         *,
         bare_energies: Optional[np.ndarray] = None,
     ) -> int:
+
         if len(label) != self.size:
             raise ValueError(
                 "label describe a {}-qubit state, while system "
@@ -811,10 +813,12 @@ class QubitSystem:
                 )
             _qubit = copy(qubit)
             _qubit.basis.unembed()
+
             bare_energy += _qubit.eig_energies()[level]
 
         if bare_energies is None:
             bare_energies = self.eig_energies(bare_system=True)
+
         ind = np.argmin(np.abs(bare_energies - bare_energy))
         return ind
 
