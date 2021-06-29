@@ -1,6 +1,7 @@
 from typing import Union, Optional, List, Tuple
 import warnings
 from copy import copy
+from itertools import combinations
 
 import numpy as np
 from scipy import linalg as la
@@ -11,7 +12,7 @@ from qutip import Qobj
 from ..systems import Qubit
 from ..bases import fock_basis, FockBasis, OperatorBasis
 from ..util.linalg import get_mat_elem
-from ..util.phys import average_photon
+from ..util.phys import average_photon, temperature_to_thermalenergy
 
 
 _supported_bases = (FockBasis,)
@@ -26,7 +27,9 @@ class Fluxonium(Qubit):
         charge_energy: float,
         induct_energy: float,
         joseph_energy: float,
-        flux: float,
+        ext_flux: Optional[float] = 0.5,
+        diel_loss_tan: Optional[float] = 7e-6,
+        env_temp: Optional[float] = 0.02,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
@@ -34,11 +37,12 @@ class Fluxonium(Qubit):
         self._ec = charge_energy
         self._el = induct_energy
         self._ej = joseph_energy
-        self._flux = flux
-        self._scq_compatible = False  # Used for debugging and comparison
+        self._ext_flux = ext_flux
+
+        self.diel_loss_tan = diel_loss_tan
+        self.env_temp = env_temp
 
         if basis is None:
-            # try-catch block here in case dim_hilbert is wrong
             basis = fock_basis(dim_hilbert)
 
         else:
@@ -47,13 +51,17 @@ class Fluxonium(Qubit):
 
         super().__init__(label=label, basis=basis)
 
+        self._loss_rates = dict(dielectric=self.dielectric_rates)
+
     def __copy__(self) -> "Fluxonium":
         qubit_copy = self.__class__(
             self.label,
             self.charge_energy,
             self.induct_energy,
             self.joseph_energy,
-            self.flux,
+            self.ext_flux,
+            self.diel_loss_tan,
+            self.env_temp,
             basis=copy(self.basis),
         )
         qubit_copy._drives = {
@@ -86,12 +94,12 @@ class Fluxonium(Qubit):
         self._ej = joseph_energy
 
     @property
-    def flux(self) -> float:
-        return self._flux
+    def ext_flux(self) -> float:
+        return self._ext_flux
 
-    @flux.setter
-    def flux(self, flux: float) -> None:
-        self._flux = flux
+    @ext_flux.setter
+    def ext_flux(self, flux_val: float) -> None:
+        self._ext_flux = flux_val
 
     @property
     def res_freq(self) -> float:
@@ -113,17 +121,22 @@ class Fluxonium(Qubit):
     def charge_zpf(self) -> float:
         return (self._el / (32 * self._ec)) ** 0.25
 
+    @property
+    def loss_channels(self):
+        return list(self._loss_rates.keys())
+
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
-
         return charge_op
 
     def charge_op(
         self,
         *,
+        expand=True,
         as_qobj=False,
     ) -> np.ndarray:
-        charge_op = self.basis.finalize_op(self._get_charge_op())
+        op = self._get_charge_op()
+        charge_op = self.basis.finalize_op(op, expand=expand)
 
         if as_qobj:
             dim = self.basis.sys_truncated_dims
@@ -142,8 +155,9 @@ class Fluxonium(Qubit):
         flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
         return flux_op
 
-    def flux_op(self, *, as_qobj=False) -> np.ndarray:
-        flux_op = self.basis.finalize_op(self._get_flux_op())
+    def flux_op(self, *, expand=True, as_qobj=False) -> np.ndarray:
+        op = self._get_flux_op()
+        flux_op = self.basis.finalize_op(op, expand=expand)
 
         if as_qobj:
             dim = self.basis.sys_truncated_dims
@@ -164,7 +178,7 @@ class Fluxonium(Qubit):
             charge_energy=self.charge_energy,
             induct_energy=self.induct_energy,
             joseph_energy=self.joseph_energy,
-            flux=self.flux,
+            ext_flux=self.ext_flux,
         )
         return q_attrs
 
@@ -172,12 +186,9 @@ class Fluxonium(Qubit):
         self,
     ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            if self._scq_compatible:
-                osc_hamil = self.res_freq * self.basis.num_op
-            else:
-                osc_hamil = self.res_freq * (self.basis.num_op + 0.5 * self.basis.id_op)
+            osc_hamil = self.res_freq * (self.basis.num_op + 0.5 * self.basis.id_op)
 
-            flux_phase = np.exp(1j * 2 * pi * self.flux)
+            flux_phase = np.exp(1j * 2 * pi * self.ext_flux)
 
             exp_mat = flux_phase * la.expm(1j * self._get_flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
@@ -188,21 +199,25 @@ class Fluxonium(Qubit):
 
         return hamil.real
 
-    def hamiltonian(self, *, as_qobj=False) -> np.ndarray:
-        hamil = self.basis.finalize_op(self._get_hamiltonian())
+    def hamiltonian(self, *, expand=True, as_qobj=False) -> np.ndarray:
+        op = self._get_hamiltonian()
+        hamil = self.basis.finalize_op(op, expand=expand)
 
         if as_qobj:
             dim = self.basis.sys_truncated_dims
-
             qobj_op = Qobj(
-                inpt=hamil, dims=[dim, dim], shape=hamil.shape, type="oper", isherm=True
+                inpt=hamil,
+                dims=[dim, dim],
+                shape=hamil.shape,
+                type="oper",
+                isherm=True,
             )
             return qobj_op
         return hamil
 
     def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         pot = 0.5 * self._el * flux * flux - self._ej * np.cos(
-            flux + 2 * np.pi * self.flux
+            flux + 2 * np.pi * self.ext_flux
         )
         return pot
 
@@ -277,8 +292,23 @@ class Fluxonium(Qubit):
         return dataset
 
     def dielectric_rates(
-        self, level_k: int, level_m: int, qdiel: float, beta: float, return_op=False
+        self,
+        level_k: int,
+        level_m: int,
     ) -> Tuple[float, float]:
+        if not isinstance(self.diel_loss_tan, float):
+            raise ValueError(
+                "Dielectric loss tangent expected as a"
+                "float value, instead got {}".format(type(self._qdiel))
+            )
+        if not isinstance(self.env_temp, float):
+            raise ValueError(
+                "Environment temperature expected as a"
+                "float value, instead got {}".format(type(self._beta))
+            )
+        qdiel = 1 / self.diel_loss_tan
+        beta = 1 / temperature_to_thermalenergy(self.env_temp)
+
         if qdiel < 0 or beta < 0:
             raise ValueError(
                 "Quality factor qdiel and (absolute) "
@@ -287,13 +317,11 @@ class Fluxonium(Qubit):
 
         if level_k == level_m:
             raise ValueError(
-                "Eigenstate labels level_k and level_m " "must be different."
+                "Eigenstate indices level_k and level_m must be different."
             )
 
         if level_k < 0 or level_m < 0:
-            raise ValueError(
-                "Eigenstate labels level_k and level_m must " "be positive."
-            )
+            raise ValueError("Eigenstate indices level_k and level_m must be positive.")
         elif level_k >= self.dim_hilbert or level_m >= self.dim_hilbert:
             raise ValueError(
                 "Eigenstate labels k and m must be smaller than"
@@ -303,67 +331,88 @@ class Fluxonium(Qubit):
         if level_k > level_m:
             level_k, level_m = level_m, level_k
 
-        eig_en, eig_vec = self.eig_states([level_k, level_m])
+        eig_en, eig_vec = self.eig_states([level_k, level_m], expand=False)
         energy_diff = (eig_en[1] - eig_en[0]) / self._ec
-        phi_km = get_mat_elem(self.flux_op(), eig_vec[1], eig_vec[0])
 
-        gamma = self._ec * 1 / (4 * qdiel) * energy_diff ** 2 * np.abs(phi_km) ** 2
+        op = self.flux_op(expand=False)
+        phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
+
+        gamma = self._ec * energy_diff ** 2 * phi_km ** 2 / (4 * qdiel)
         nth = average_photon(energy_diff * self._ec, beta)
 
         relaxation_rate = gamma * (nth + 1)
         excitation_rate = gamma * nth
 
-        if return_op:
-            down_op = np.outer(eig_vec[0], np.conj(eig_vec[1]))
-            return relaxation_rate, excitation_rate, down_op
-
         return relaxation_rate, excitation_rate
 
-    def _get_dielectric_jump(
-        self, level_k: int, level_m: int, qdiel: float, beta: float
+    def loss_rates(
+        self,
+        level_k: int,
+        level_m: int,
+        loss_channels: Optional[List[str]] = None,
+    ):
+        if loss_channels is not None:
+            for channel in loss_channels:
+                if channel not in self.loss_channels:
+                    raise ValueError(
+                        "The provided channel {} is not supported "
+                        "by the fluxonium qubit.".format(channel)
+                    )
+
+        channels = loss_channels or self.loss_channels
+
+        channel_loss_rates = [
+            self._loss_rates[channel](level_k, level_m) for channel in channels
+        ]
+        total_rates = tuple(map(sum, zip(*channel_loss_rates)))
+        return total_rates
+
+    def _get_loss_ops(
+        self,
+        level_k: int,
+        level_m: int,
+        loss_channels: Optional[List[str]] = None,
     ) -> Tuple[np.ndarray]:
+        rates = self.loss_rates(level_k, level_m, loss_channels)
+        _, states = self.eig_states((level_k, level_m), expand=False)
+        trans_ops = _get_trans_ops(*states)
+        jump_ops = (np.sqrt(rate) * op for rate, op in zip(rates, trans_ops))
+        return jump_ops
 
-        relaxation_rate, excitation_rate, down_op = self.dielectric_rates(
-            level_k, level_m, qdiel, beta, return_op=True
-        )
-
-        up_op = down_op.conj().T
-
-        jump_down = np.sqrt(relaxation_rate) * down_op
-        jump_up = np.sqrt(excitation_rate) * up_op
-
-        return jump_down, jump_up
-
-    def dielectric_jump(
-        self, level_k: int, level_m: int, qdiel: float, beta: float, as_qobj=False
-    ) -> Tuple[np.ndarray]:
-        jump_down, jump_up = self._get_dielectric_jump(level_k, level_m, qdiel, beta)
-        if as_qobj:
-            dim = self.dim_hilbert
-            jump_down_qobj = Qobj(
-                inpt=jump_down,
-                dims=[[dim], [dim]],
-                shape=[dim, dim],
-                type="oper",
-                isherm=True,
-            )
-            jump_up_qobj = Qobj(
-                inpt=jump_up,
-                dims=[[dim], [dim]],
-                shape=[dim, dim],
-                type="oper",
-                isherm=True,
-            )
-            return jump_down_qobj, jump_up_qobj
-        return jump_down, jump_up
-
-    def dielectric_loss(
-        self, qdiel: float, beta: float, as_qobj=False
+    def loss_ops(
+        self,
+        level_k: int,
+        level_m: int,
+        loss_channels: Optional[List[str]] = None,
+        as_qobj: Optional[bool] = False,
+        *,
+        expand: Optional[bool] = True,
     ) -> List[np.ndarray]:
-        jump_list = []
-        for level_k in range(0, self.dim_hilbert):
-            for level_m in range(level_k + 1, self.dim_hilbert):
-                jump_list.extend(
-                    self.dielectric_jump(level_k, level_m, qdiel, beta, as_qobj)
-                )
-        return jump_list
+        ops = self._get_loss_ops(level_k, level_m, loss_channels)
+        if expand:
+            ops = (self.basis.expand_op(op) for op in ops)
+        if as_qobj:
+            qobj_ops = (self._qobj_oper(op, isherm=True) for op in ops)
+            return qobj_ops
+        return ops
+
+    def collapse_ops(
+        self,
+        loss_channels: Optional[List[str]] = None,
+        as_qobj: Optional[bool] = False,
+        *,
+        expand: Optional[bool] = True,
+    ):
+        collapse_ops = []
+        level_pairs = combinations(range(self.dim_hilbert), 2)
+        for level_pair in level_pairs:
+            collapse_ops.extend(
+                self.loss_ops(*level_pair, loss_channels, as_qobj, expand=expand)
+            )
+        return collapse_ops
+
+
+def _get_trans_ops(in_state, out_state):
+    down_op = np.outer(in_state, out_state.conj())
+    up_op = np.transpose(down_op.conj())
+    return down_op, up_op

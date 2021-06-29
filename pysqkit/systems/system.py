@@ -55,7 +55,7 @@ class Qubit(ABC):
         return len(self.drives) > 0
 
     @abstractmethod
-    def hamiltonian(self) -> np.ndarray:
+    def hamiltonian(self, *, expand_op=True) -> np.ndarray:
         pass
 
     @abstractmethod
@@ -70,36 +70,46 @@ class Qubit(ABC):
     def _qubit_attrs(self) -> dict:
         pass
 
-    @abstractmethod
-    def dielectric_loss(self) -> List[np.ndarray]:
-        pass
-
-    def _get_eig_vals(self, subset_inds: Tuple[int]) -> np.ndarray:
-        hamil = self.hamiltonian()
+    def _get_eig_vals(
+        self,
+        subset_inds: Tuple[int],
+        expand: bool,
+    ) -> np.ndarray:
+        hamil = self.hamiltonian(expand=expand)
         eig_vals = la.eigh(hamil, eigvals_only=True, subset_by_index=subset_inds)
         return eig_vals
 
-    def _get_eig_states(self, subset_inds: Tuple[int]) -> Tuple[np.ndarray, np.ndarray]:
-        hamil = self.hamiltonian()
+    def _get_eig_states(
+        self,
+        subset_inds: Tuple[int],
+        expand: bool,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        hamil = self.hamiltonian(expand=expand)
         eig_vals, eig_vecs = la.eigh(
             hamil, eigvals_only=False, subset_by_index=subset_inds
         )
         return eig_vals, eig_vecs.T
 
     def eig_energies(
-        self, levels: Optional[Union[int, Iterable[int]]] = None
+        self,
+        levels: Optional[Union[int, Iterable[int]]] = None,
+        *,
+        expand: Optional[bool] = True,
     ) -> np.ndarray:
         subset_inds, sel_inds = self._parse_levels(levels)
-        eig_vals = self._get_eig_vals(subset_inds)
+        eig_vals = self._get_eig_vals(subset_inds, expand)
         if sel_inds is not None:
             return order_vecs(eig_vals[sel_inds])
         return order_vecs(eig_vals)
 
     def eig_states(
-        self, levels: Optional[Union[int, Iterable[int]]] = None
+        self,
+        levels: Optional[Union[int, Iterable[int]]] = None,
+        *,
+        expand: Optional[bool] = True,
     ) -> Tuple[np.ndarray, np.ndarray]:
         subset_inds, sel_inds = self._parse_levels(levels)
-        eig_vals, eig_vecs = self._get_eig_states(subset_inds)
+        eig_vals, eig_vecs = self._get_eig_states(subset_inds, expand)
         if sel_inds is not None:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
@@ -114,7 +124,7 @@ class Qubit(ABC):
                 "system d={}".format(self.dim_hilbert)
             )
 
-        _, eig_states = self.eig_states(levels=self.dim_hilbert)
+        _, eig_states = self.eig_states(levels=self.dim_hilbert, expand=False)
         self.basis.transform(eig_states)
         self.basis.truncate(num_levels)
 
@@ -123,6 +133,7 @@ class Qubit(ABC):
         operator: Union[str, np.ndarray],
         levels: Union[int, Iterable[int]] = None,
         *,
+        expand: Optional[bool] = True,
         as_xarray: Optional[bool] = False,
     ) -> np.ndarray:
         if isinstance(operator, str):
@@ -136,7 +147,11 @@ class Qubit(ABC):
 
             elif hasattr(self, operator):
                 _op = getattr(self, operator)
-                op = _op() if callable(_op) else _op
+                if callable(_op):
+                    _op_params = _func_params(_op)
+                    op = _op(expand=expand) if expand in _op_params else _op()
+                else:
+                    op = _op
                 if not isinstance(op, np.ndarray):
                     raise ValueError("Obtained operator is not a numpy array")
                 if len(op.shape) != 2:
@@ -152,20 +167,19 @@ class Qubit(ABC):
         else:
             raise ValueError("Incorrect operator provided")
 
-        _, in_states = self.eig_states(levels=levels)
-        _, out_states = self.eig_states(levels=levels)
+        _, states = self.eig_states(levels=levels, expand=expand)
 
-        mat_elems = get_mat_elem(op, in_states, out_states)
-
-        if levels is not None:
-            if isinstance(levels, int):
-                levels_arr = list(range(levels))
-            elif isinstance(levels, Iterable):
-                levels_arr = list(levels)
-        else:
-            levels_arr = list(range(self.dim_hilbert))
+        mat_elems = get_mat_elem(op, states, states)
 
         if as_xarray:
+            if levels is not None:
+                if isinstance(levels, int):
+                    levels_arr = list(range(levels))
+                elif isinstance(levels, Iterable):
+                    levels_arr = list(levels)
+            else:
+                levels_arr = list(range(self.dim_hilbert))
+
             data_arr = xr.DataArray(
                 data=mat_elems,
                 dims=["in_level", "out_level"],
@@ -286,6 +300,22 @@ class Qubit(ABC):
             sel_inds = None
 
         return subset_inds, sel_inds
+
+    def _qobj_oper(self, op, isherm=None, expand=True):
+        if expand:
+            dim = self.basis.sys_truncated_dims
+        else:
+            dim = [self.basis.truncated_dim]
+
+        sys_dim = np.prod(dim)
+        qobj = Qobj(
+            inpt=op,
+            dims=[dim, dim],
+            shape=[sys_dim, sys_dim],
+            type="oper",
+            isherm=isherm,
+        )
+        return qobj
 
 
 class Coupling:
@@ -787,12 +817,9 @@ class QubitSystem:
             return order_vecs(eig_vals[sel_inds], eig_vecs[sel_inds])
         return order_vecs(eig_vals, eig_vecs)
 
-
     def state_index(
         self,
         label: str,
-        *,
-        bare_energies: Optional[np.ndarray] = None,
     ) -> int:
 
         if len(label) != self.size:
@@ -811,13 +838,9 @@ class QubitSystem:
                         level, qubit.label, qubit.dim_hilbert
                     )
                 )
-            _qubit = copy(qubit)
-            _qubit.basis.unembed()
+            bare_energy += qubit.eig_energies(levels=[level], expand=False)
 
-            bare_energy += _qubit.eig_energies()[level]
-
-        if bare_energies is None:
-            bare_energies = self.eig_energies(bare_system=True)
+        bare_energies = self.eig_energies(bare_system=True)
 
         ind = np.argmin(np.abs(bare_energies - bare_energy))
         return ind
@@ -887,10 +910,9 @@ class QubitSystem:
         else:
             raise ValueError("Incorrect operator provided")
 
-        _, in_states = self.eig_states(levels=levels)
-        _, out_states = self.eig_states(levels=levels)
+        _, states = self.eig_states(levels=levels)
 
-        mat_elems = get_mat_elem(op, in_states, out_states)
+        mat_elems = get_mat_elem(op, states, states)
 
         if levels is not None:
             if isinstance(levels, int):
