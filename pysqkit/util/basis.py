@@ -1,4 +1,6 @@
 from itertools import product
+from pysqkit.util.linalg import hilbert_schmidt
+from typing import List
 
 import numpy as np
 
@@ -54,3 +56,13 @@ def pauli_basis():
     ops = np.array(list(pauli_ops.values()))
     basis = OperatorBasis(ops, labels)
     return basis
+
+
+
+    
+
+
+
+
+
+

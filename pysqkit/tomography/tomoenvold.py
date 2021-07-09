@@ -20,7 +20,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
    
 ##Tools
 #general
-def _n_th(maxs, n):  
+def n_th(maxs, n):  
     '''returns n-th tuple with the i_th term varying between 0 and maxs[i]'''
     temp = np.zeros(len(maxs))
     for i in range(0, len(temp)):
@@ -29,7 +29,7 @@ def _n_th(maxs, n):
     res = [int(k) for k in temp]
     return res
     
-def _index_from_label(maxs, label):
+def index_from_label(maxs, label):
     return int(np.sum([label[i] * np.prod(maxs[i+1:])  for i in range(len(label))]))
     
 #visualisation
@@ -261,14 +261,14 @@ def avg_gate_fid_from_scratch_fast(system, U_ideal, correc, labels_chi_1 = "comp
 ##  Tomo env class 
     
     
-class TomoEnv:   
+class TomoEnvOld:   
     def __init__(
         self,
         system = None,
-        definition_type: str = None,
-        nb_levels: Union[int, Iterable[int]] = None ,
-        param_syst = None,
-        table_states = None,
+        # definition_type: str = None,
+        # nb_levels: Union[int, Iterable[int]] = None ,
+        # param_syst = None,
+        # table_states = None,
         jump_op = [],
         store_outputs = False):
             '''  Either system is not None and it's all we need OR system is None and all the rest must be defined
@@ -278,109 +278,109 @@ class TomoEnv:
             self.store_outputs = store_outputs
             self.nb_gate_call = 0
             
-            if system is None: #old method
+            # if system is None: #old method
             
-                assert not definition_type is None
-                assert not nb_levels is None
-                assert not param_syst is None
+            #     assert not definition_type is None
+            #     assert not nb_levels is None
+            #     assert not param_syst is None
                 
                 
-                #def type
-                assert definition_type in ['U', 'kraus'] #'2-qubit simu']
-                self._definition_type = definition_type
+            #     #def type
+            #     assert definition_type in ['U', 'kraus'] #'2-qubit simu']
+            #     self._definition_type = definition_type
                 
-                #nb_levels and d
-                if isinstance(nb_levels, int):
-                    nb_levels = [nb_levels]
-                self._nb_levels = nb_levels
-                self._d = int(np.prod(nb_levels))
+            #     #nb_levels and d
+            #     if isinstance(nb_levels, int):
+            #         nb_levels = [nb_levels]
+            #     self._nb_levels = nb_levels
+            #     self._d = int(np.prod(nb_levels))
                 
-                #parameters 
-                if self._definition_type == 'U':
-                    assert 'U' in param_syst.keys()
-                    assert hasattr(param_syst['U'], 'shape') \
-                            and (param_syst['U'].shape[0] == self._d) \
-                            and (param_syst['U'].shape[1] == self._d)
-                    self._carac = param_syst['U']
+            #     #parameters 
+            #     if self._definition_type == 'U':
+            #         assert 'U' in param_syst.keys()
+            #         assert hasattr(param_syst['U'], 'shape') \
+            #                 and (param_syst['U'].shape[0] == self._d) \
+            #                 and (param_syst['U'].shape[1] == self._d)
+            #         self._carac = param_syst['U']
                             
-                elif self._definition_type == 'kraus':
-                    assert 'op_list' in param_syst.keys()
-                    assert len(param_syst['op_list']) <= self._d**2
-                    for op in param_syst['op_list']:
-                        assert hasattr(op, 'shape') \
-                                and (op.shape[0] == self._d) \
-                                and (op.shape[1] == self._d)
-                    self._carac = param_syst['op_list']
+            #     elif self._definition_type == 'kraus':
+            #         assert 'op_list' in param_syst.keys()
+            #         assert len(param_syst['op_list']) <= self._d**2
+            #         for op in param_syst['op_list']:
+            #             assert hasattr(op, 'shape') \
+            #                     and (op.shape[0] == self._d) \
+            #                     and (op.shape[1] == self._d)
+            #         self._carac = param_syst['op_list']
                 
-                # elif self._definition_type == '2-qubit simu':
-                #     assert 'qb1' in param_syst.keys()
-                #     assert 'qb2' in param_syst.keys()
-                #     assert 'jc' in param_syst.keys()
-                #     
-                #     # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
-                #     # table_states = param_syst['get_state_basis'](param_syst)
-                #     
-                #     # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
-                #     # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
-                #     # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
-                #     # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
-                #     
-                #     assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
-                #     #the simu one takes an initial state (of type qobj) and param_syst
+            #     # elif self._definition_type == '2-qubit simu':
+            #     #     assert 'qb1' in param_syst.keys()
+            #     #     assert 'qb2' in param_syst.keys()
+            #     #     assert 'jc' in param_syst.keys()
+            #     #     
+            #     #     # assert 'get_state_basis' in param_syst.keys()  #function whose only argument is param_syst  
+            #     #     # table_states = param_syst['get_state_basis'](param_syst)
+            #     #     
+            #     #     # assert 'get_h_drive' in param_syst.keys()  #function whose only argument is param_syst
+            #     #     # assert 'get_pulse_drive' in param_syst.keys()  #function whose only argument is param_syst
+            #     #     # assert 'get_jump' in param_syst.keys()  #function whose only argument is param_syst
+            #     #     # assert 'get_tlist' in param_syst.keys()  #function whose only argument is param_syst 
+            #     #     
+            #     #     assert 'simu' in param_syst.keys()  #could be otehrwise but allows to control the output 
+            #     #     #the simu one takes an initial state (of type qobj) and param_syst
                 
                     
                     
-                self._param_syst = param_syst 
+            #     self._param_syst = param_syst 
                 
-                #table_states
-                if table_states is None:
-                    self._table_states = []
-                    for k in range(self._d):
-                        self._table_states.append(qtp.fock(self._nb_levels, _n_th(self._nb_levels, k) ))
-                else :
-                    self._table_states = table_states #should be a list of states in ket form, ordered by ascending label
+            #     #table_states
+            #     if table_states is None:
+            #         self._table_states = []
+            #         for k in range(self._d):
+            #             self._table_states.append(qtp.fock(self._nb_levels, n_th(self._nb_levels, k) ))
+            #     else :
+            #         self._table_states = table_states #should be a list of states in ket form, ordered by ascending label
 
 
 
 
 
-            else : #def from system, only system and table states if not none will be taken into consideration
+            #else : #def from system, only system and table states if not none will be taken into consideration
             #for now only deals with 2 qubit systems
-                self._nb_levels = [qubit.dim_hilbert for qubit in system.qubits]
-                self._d = int(np.prod(self._nb_levels))
-                self._definition_type = '2system'
-                self._carac = system
+            self._nb_levels = [qubit.dim_hilbert for qubit in system.qubits]
+            self._d = int(np.prod(self._nb_levels))
+            #self._definition_type = '2system'
+            self._system = system
                 
                 #table_states
-                if table_states is None:
-                    self._table_states = [system.state(_n_th(self._nb_levels, n), as_qobj = True)[1] for n in range(self._d)] 
-                else:
-                    self._table_states = table_states
+            #if table_states is None:
+            self._table_states = [system.state(n_th(self._nb_levels, n), as_qobj = True)[1] for n in range(self._d)] 
+            #else:
+                #self._table_states = table_states
                 
-                self._param_syst =  {}
-                self._param_syst['system'] = system
+            self._param_syst =  {}
+            self._param_syst['system'] = system
                 
-                def simu(state_init):
-                    tlist = [qubit.drives[drive_key].params['time'] for qubit in system for drive_key in qubit.drives.keys()][0]#we assume that it is lways the same
-                    hamil0 = system.hamiltonian(as_qobj=True)
+            def simu(state_init):
+                tlist = [qubit.drives[drive_key].params['time'] for qubit in system for drive_key in qubit.drives.keys()][0]#we assume that it is always the same
+                hamil0 = system.hamiltonian(as_qobj=True)
                     
-                    hamil_drive = []
-                    pulse_drive = []
+                hamil_drive = []
+                pulse_drive = []
                     
-                    for qubit in system:
-                        if qubit.is_driven:
-                            for label, drive in qubit.drives.items():
-                                hamil_drive.append(drive.hamiltonian(as_qobj=True))
-                                pulse_drive.append(drive.eval_pulse())
+                for qubit in system:
+                    if qubit.is_driven:
+                        for label, drive in qubit.drives.items():
+                            hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                            pulse_drive.append(drive.eval_pulse())
                     
-                    jump_list = jump_op #[qubit.dielectric_loss() for qubit in system.qubits]
+                jump_list = jump_op #[qubit.dielectric_loss() for qubit in system.qubits]
                     
-                    result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
+                result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive, pulse_drive, jump_list, "mesolve")
                     
-                    res = result.states[-1]
-                    return res #/np.trace(res.full())
+                res = result.states[-1]
+                return res #/np.trace(res.full())
                     
-                self._param_syst['simu'] = simu
+            self._param_syst['simu'] = simu
                     
         
 #only getters, no setters        
@@ -397,12 +397,12 @@ class TomoEnv:
         return self._param_syst
         
     @property
-    def carac(self): #what characterizes the env
-        return self._carac
+    def system(self): #what characterizes the env
+        return self._system
         
-    @property
-    def definition_type(self):
-        return self._definition_type
+    # @property
+    # def definition_type(self):
+    #     return self._definition_type
         
     # @property
     # def table_states(self):
@@ -413,7 +413,7 @@ class TomoEnv:
 
     def _index_to_label(self, index: int):  
         '''returns the label (ie the states of the different qudits in the system) from the index'''
-        return _n_th(self.nb_levels, index)
+        return n_th(self.nb_levels, index)
     
         
     def _label_to_index(self, label: Union[int, Iterable[int]]):
@@ -425,7 +425,7 @@ class TomoEnv:
             print("Error! : The length of the label doens't match ; it should be of length"+str(len(nb_levels)))
             
         else:
-            return _index_from_label(self.nb_levels, label)
+            return index_from_label(self.nb_levels, label)
             
 
 
@@ -519,7 +519,7 @@ class TomoEnv:
         pauli_list = []
         pauli_maxs = [int(max_lvl**2) for max_lvl in nb_levels]
         
-        tpl = _n_th(pauli_maxs, i) #tuple of indices of the P_i that will appear in the product defining E_tilde 
+        tpl = n_th(pauli_maxs, i) #tuple of indices of the P_i that will appear in the product defining E_tilde 
                                 #(as in sigma_i x sigma_j x sigma_k)
                                 #For L levels, there are L^2 _Pauli_gen matrices
                                 
@@ -610,21 +610,21 @@ class TomoEnv:
         
         
         #now the different possible cases
-        if self._definition_type == 'kraus':
-            res = self._gate_from_Kraus(state_init)
+        # if self._definition_type == 'kraus':
+        #     res = self._gate_from_Kraus(state_init)
             
-        elif self._definition_type == 'U':
-            res = self._gate_from_U(state_init)
+        # elif self._definition_type == 'U':
+        #     res = self._gate_from_U(state_init)
         
-        elif self._definition_type == '2-qubit simu':
-            res = self._gate_from_simu(state_init)
+        # elif self._definition_type == '2-qubit simu':
+        #     res = self._gate_from_simu(state_init)
             
-        elif self._definition_type == '2system':
-            res = self._gate_from_simu(state_init)
+        # elif self._definition_type == '2system':
+        res = self._gate_from_simu(state_init)
         
-        else :
-            raise("Error ! \nDefinition type not recognized. \nPossible values are : \
-                    'kraus', 'U', '2-qubit simu', '2system' ")
+        # else :
+        #     raise("Error ! \nDefinition type not recognized. \nPossible values are : \
+        #             'kraus', 'U', '2-qubit simu', '2system' ")
                     
         if self.store_outputs and isinstance(init, list):
             self.param_syst[key] = res
@@ -674,8 +674,7 @@ class TomoEnv:
         
         #trick to avoid redundant calculations
         key = "lambda"
-        if self.definition_type == "2system":
-            key += str(hash(self.carac))
+        key += str(hash(self.system))
         key += str(np.sort(in_ind))
         key += str(np.sort(out_ind))
         
@@ -709,14 +708,14 @@ class TomoEnv:
         #filling
         for i in range(len(in_ind)**2):
             #we range over the pairs of in_labels
-            n_i, m_i = _n_th([len(in_ind),len(in_ind)], i)
+            n_i, m_i = n_th([len(in_ind),len(in_ind)], i)
             
             rho_prime_i = rho_prime(in_ind[n_i], in_ind[m_i])
             
                 
             for j in range(len(out_ind)**2):
                 #we range over the pairs of out_labels
-                n_j, m_j = _n_th([len(out_ind),len(out_ind)], j)
+                n_j, m_j = n_th([len(out_ind),len(out_ind)], j)
                 
                 lambda_mat[i,j] = np.trace(rho_prime_i.full().dot(
                                                 self._rho_nm(out_ind[n_j], out_ind[m_j]).dag().full())  
@@ -748,8 +747,8 @@ class TomoEnv:
             # print("Used stored for lambda_coef")
             return self.param_syst[key]
         
-        n_in, m_in = _n_th([self.d, self.d], in_ind)
-        n_out, m_out = _n_th([self.d, self.d], out_ind)
+        n_in, m_in = n_th([self.d, self.d], in_ind)
+        n_out, m_out = n_th([self.d, self.d], out_ind)
         
         
         if n_in == m_in:
@@ -1022,8 +1021,8 @@ class TomoEnv:
     
         d = self.d
         #translate indices
-        j,k = _n_th([d**2, d**2], mu)
-        m,n = _n_th([d**2, d**2], nu)
+        j,k = n_th([d**2, d**2], mu)
+        m,n = n_th([d**2, d**2], nu)
         
         return self._beta_4D(j,k,m,n)
             
