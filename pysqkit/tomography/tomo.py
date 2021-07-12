@@ -14,6 +14,8 @@ import cmath
 # import pysqkit
 from pysqkit.solvers.solvkit import integrate
 from pysqkit.systems.system import QubitSystem
+from pysqkit.util.linalg import hilbert_schmidt
+from pysqkit.util.transformations import iso_basis
 
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -83,7 +85,7 @@ class TomoEnv:
     def jump_op(self): #what characterizes the env
         return self._jump_op
     
-    def simu(state_init):
+    def simu(self, state_init):
         tlist = [qubit.drives[drive_key].params['time'] for \
             qubit in self._system for drive_key in qubit.drives.keys()][0] 
         hamil0 = self._system.hamiltonian(as_qobj=True)
@@ -262,11 +264,58 @@ class TomoEnv:
         else:
             return lambda_mat
     
-    def to_qudit_ptm(
+    def evolve_hs_basis(
+        self,
+        i: int,
+        input_states: List[np.ndarray],
+        hs_basis: Callable[[int, int], np.ndarray]
+    ) -> np.ndarray:
+        
+        """
+        It returns the action of the quantum operation associated
+        with the time-evolution on the i-th element of a Hilbert-Schmidt
+        basis define via the function hs_basis with computational 
+        basis states in input_states.
+        """
+
+        d = len(input_states)
+
+        dims_qobj = self._table_states[0].dims
+
+        basis_i = hs_basis(i, d)
+        eigvals, eigvecs = np.linalg.eig(basis_i)
+        evolved_basis_i = 0
+        for n in range(0, d):
+            iso_eigvec = 0
+            for m in range(0, d):
+                iso_eigvec += eigvecs[m, n]*input_states[m]
+            iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=dims_qobj)
+            rho_iso_eigvec_qobj = iso_eigvec_qobj*iso_eigvec_qobj.dag()
+            evolved_iso_eigvec = self.simu(rho_iso_eigvec_qobj)
+            evolved_basis_i += eigvals[n]*evolved_iso_eigvec
+        return evolved_basis_i
+    
+    def to_super( 
         self, 
-        input_states=List[np.ndarray], 
-        output_states=List[np.ndarray], 
+        input_states: List[np.ndarray], 
+        hs_basis: Callable[[int, int], np.ndarray],
         as_qobj=False
     ):
-        pass
+        """
+
+        """
+
+        d = len(input_states)
+        superoperator = np.zeros([d**2, d**2], dtype=complex)
+        basis = [] 
+        for i in range(0, d**2):
+            basis.append(iso_basis(i, input_states, hs_basis))
+        
+        for i in range(0, d**2):
+            evolved_basis = self.evolve_hs_basis(i, input_states, hs_basis)
+            for k in range(0, d**2):
+                superoperator[i, k] = hilbert_schmidt(basis[k], evolved_basis)
+        
+        return superoperator
+
         

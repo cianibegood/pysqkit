@@ -16,9 +16,13 @@ def weyl(
     d: int
 ) -> np.ndarray:
 
-    """ It returns the qudit Weyl operator with index xi_x, xi_z.
+    """ 
+    Returns the qudit Weyl operator with phase-space points xi_x, xi_z
+    in a d x d phase space.
     We take the normalized version of the definition in 
-    M. Howard et al, Nature 510, 351 (2014) """
+    M. Howard et al, Nature 510, 351 (2014), i.e., divided by
+    square root of d.
+    """
 
     if xi_x >= d or xi_z >= d:
         raise ValueError("Qudit Pauli labels out of range.")
@@ -42,6 +46,11 @@ def weyl_by_index(
     d: int
 ) -> np.ndarray:
     
+    """
+    Returns the Weyl operator associated with index i in a d x d phase-space
+    We order the Weyl operators as i -> (xi_x = i // d, xi_z = i % d).
+    """
+    
     if i >= d**2:
         raise ValueError("Index i out of range: i < d**2")
 
@@ -49,10 +58,39 @@ def weyl_by_index(
     xi_z = i % d
     return weyl(xi_x, xi_z, d)
 
+def iso_basis(
+    i: int,
+    input_states:List[np.ndarray],
+    hs_basis: Callable[[int, int], np.ndarray]
+) -> np.ndarray:
+
+    """ 
+    Returns the hilbert-schmidt basis operator associated with index i, 
+    using the input_states as defining basis. The input_states
+    can be written in an arbitrary basis, and the operator will 
+    thus be expressed in this basis.
+    """
+    
+    d = len(input_states) 
+
+    v = hs_basis(i, d)
+    v_iso = 0 
+    for n in range(0, d):
+        for m in range(0, d):
+            ket_bra = np.outer(input_states[n], input_states[m].conj())
+            v_iso += v[n, m]*ket_bra 
+    return v_iso 
+
 def kraus_to_super(
     kraus: Union[np.ndarray, List[np.ndarray]],  
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
+
+    """
+    Returns the superoperator associated with a quantum operation defined by
+    a list of kraus operators in a user-defined Hilbert-Schmidt basis 
+    via the function hs_basis.
+    """
     
     if isinstance(kraus, list):
         d = kraus[0].shape[0]
@@ -84,6 +122,11 @@ def rho_to_vector(
     rho: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
+
+    """ 
+    Gives a density matrix rho as a vector in a user-defined 
+    Hilbert-Schmidt basis via the function hs_basis.
+    """
     
     d = rho.shape[0]
 
@@ -99,6 +142,12 @@ def vector_to_rho(
     rho_vec: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
+
+    """ 
+    Converts a vectorized density matrix rho_vec written in a 
+    Hilbert-Schmidt basis, defined by the function hs_basis, 
+    in a standard matrix representation of a density matrix.
+    """
     
     d = int(np.sqrt(rho_vec.shape[0]))
 
