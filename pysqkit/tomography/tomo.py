@@ -46,7 +46,9 @@ class TomoEnv:
         self,
         system: QubitSystem,
         jump_op = [],
-        store_outputs = False):
+        store_outputs = False,
+        options: qtp.solver.Options=None
+        ):
             '''  Either system is not None and it's all we need OR 
             system is None and all the rest must be defined
             
@@ -64,6 +66,8 @@ class TomoEnv:
                 
             self._table_states = [system.state(n_th(self._nb_levels, n), \
                 as_qobj = True)[1] for n in range(self._d)] 
+            
+            self._options = options
                            
     @property
     def nb_levels(self):
@@ -102,167 +106,10 @@ class TomoEnv:
         jump_list = self._jump_op 
                     
         result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive,
-                           pulse_drive, jump_list, "mesolve")
+                           pulse_drive, jump_list, "mesolve", options=self._options)
                     
         res = result.states[-1]
-        return res
-
-
-    def _index_to_label(self, index: int):  
-        '''returns the label (ie the states of the different qudits
-         in the system) from the index'''
-        return n_th(self.nb_levels, index)
-    
-        
-    def _label_to_index(self, label: Union[int, Iterable[int]]):
-        if isinstance(label, int):
-            label = [label]
-            
-        nb_levels = self.nb_levels
-        if len(label) != self._n_qubits:
-            raise ValueError("Error! : The length of the label doesn't match ;" \
-                + " it should be of length" + str(len(nb_levels)))
-        
-        for k in range(0, self._n_qubits):
-            if label[k] >= self._nb_levels[k]:
-                raise ValueError("Label exceeds the dimension of qubit " \
-                    + str(k))  
-        else:
-            return index_from_label(self.nb_levels, label)
-    
-    def _ket_index(self, n: int):
-        return  self._table_states[n] #self._table_states[n].unit()
-    def _bra_index(self, n: int):
-        return  self._table_states[n].dag()
-    def _dm_index(self, n: int):
-        return self._ket_index(n) * self._bra_index(n)
-    
-    #different representations of states from label
-    def _ket_label(self, label):
-        return self._ket_index(self._label_to_index(label))
-    def _bra_label(self, label):
-        return self._bra_index(self._label_to_index(label))
-    def _dm_label(self, label):
-        return self._ket_label(label) * self._bra_label(label)
-    
-    # |n><m|
-    def _rho_nm(self, n: int, m: int):
-        return self._ket_index(n)*self._bra_index(m)
-    def _rho_j(self, j: int):
-        m = j%self.d
-        n = j//self.d
-        
-        return self._rho_nm(n,m)
-    
-    def _gate_from_simu(self, state_init): 
-        '''param should contain 'simu' that runs simu from a dict with parameters and init  ;
-        simu should onlytake init as Qobj'''
-                   
-        return self.simu(state_init)
-    
-    def to_lambda(
-        self, 
-        input_states=List[np.ndarray],
-        output_states=List[np.ndarray], 
-        draw_lambda=False, 
-        as_qobj=False
-    ):
-            
-        #clean label lists
-        # A.C.: This is not system agnostic and assumes it is 2-qubit
-        # A.C.: we could define computational states in the QubitSystem class.
-        if input_states=="comp_states":
-            in_labels = [(0,0), (0,1), (1,0), (1,1)]
-        elif input_states=="all":
-            in_labels = [self._index_to_label(k) for k in range(self.d)]
-        else:
-            raise ValueError("Unsupported input states.")
-
-        if output_states == "comp_states":
-            out_labels = [(0,0), (0,1), (1,0), (1,1)]
-        elif output_states == "all":
-            out_labels = [self._index_to_label(k) for k in range(self.d)]
-        else:
-            raise ValueError("Unsupported output states.")
-            
-        #assert isinstance(in_labels, list)
-        #assert isinstance(out_labels, list)
-        
-        for lbl in in_labels:
-            assert len(lbl) == len(self.nb_levels)
-        for lbl in out_labels:
-            assert len(lbl) == len(self.nb_levels)
-            
-            
-        #now transform into lists of indices
-        in_ind = []
-        out_ind = []
-        for lbl in in_labels:
-            in_ind.append(self._label_to_index(lbl))
-        for lbl in out_labels:
-            out_ind.append(self._label_to_index(lbl))
-            
-        
-        #trick to avoid redundant calculations
-        key = "lambda"
-        key += str(hash(self.system))
-        key += str(np.sort(in_ind))
-        key += str(np.sort(out_ind))
-        
-        if key in self.param_syst.keys(): #if already processed
-            lambda_mat = self.param_syst[key]
-            # print("Used stored for lambda")
-            if draw_lambda:
-                draw_mat(lambda_mat, "\lambda")  
-            if as_qobj:
-                return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) 
-            else:
-                return lambda_mat
-
-            
-        #function to calculate rho_primes
-        def rho_prime(n,m):#n,m are indices in the table_states ie in the order of all labels
-            if n == m:
-                return self.gate([[1, n]])
-            else :
-                n_n_prime = self.gate([[1, n]])
-                m_m_prime = self.gate([[1, m]])
-                plus_plus_prime = self.gate([[1/np.sqrt(2), n], [1/np.sqrt(2), m]])
-                minus_minus_prime = self.gate([[1/np.sqrt(2), n], [1j/np.sqrt(2), m]])
-                
-                return plus_plus_prime + 1j*minus_minus_prime - (1+1j)/2 * n_n_prime - (1+1j)/2 * m_m_prime
-    
-        d = self.d
-        #skeleton
-        lambda_mat = np.zeros((len(in_ind)**2 , len(out_ind)**2))*1j
-    
-        #filling
-        for i in range(len(in_ind)**2):
-            #we range over the pairs of in_labels
-            n_i, m_i = n_th([len(in_ind),len(in_ind)], i)
-            
-            rho_prime_i = rho_prime(in_ind[n_i], in_ind[m_i])
-            
-                
-            for j in range(len(out_ind)**2):
-                #we range over the pairs of out_labels
-                n_j, m_j = n_th([len(out_ind),len(out_ind)], j)
-                
-                lambda_mat[i,j] = np.trace(rho_prime_i.full().dot(
-                                                self._rho_nm(out_ind[n_j], out_ind[m_j]).dag().full())  
-                                        )
-                                        
-        #once processed, we save it for later (part of trick from above)
-        self._param_syst[key] = lambda_mat
-        
-        
-        if draw_lambda:
-            draw_mat(lambda_mat, "\lambda")  
-        
-        if as_qobj:
-            return qtp.Qobj(inpt = lambda_mat, dims = [rho_prime_i.dims, self._rho_nm(out_ind[n_j], out_ind[m_j]).dims]) 
-        else:
-            return lambda_mat
+        return res   
     
     def evolve_hs_basis(
         self,
@@ -292,7 +139,7 @@ class TomoEnv:
             iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=dims_qobj)
             rho_iso_eigvec_qobj = iso_eigvec_qobj*iso_eigvec_qobj.dag()
             evolved_iso_eigvec = self.simu(rho_iso_eigvec_qobj)
-            evolved_basis_i += eigvals[n]*evolved_iso_eigvec
+            evolved_basis_i += eigvals[n]*evolved_iso_eigvec[:, :]
         return evolved_basis_i
     
     def to_super( 
@@ -314,7 +161,7 @@ class TomoEnv:
         for i in range(0, d**2):
             evolved_basis = self.evolve_hs_basis(i, input_states, hs_basis)
             for k in range(0, d**2):
-                superoperator[i, k] = hilbert_schmidt(basis[k], evolved_basis)
+                superoperator[k, i] = hilbert_schmidt(basis[k], evolved_basis)
         
         return superoperator
 

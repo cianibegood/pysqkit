@@ -114,48 +114,48 @@ def kraus_to_super(
 
         for k in range(0, d**2):
             vec_k = hs_basis(k, d)
-            super_op[i, k] = hilbert_schmidt(vec_k, kraus_on_vec_i)
+            super_op[k, i] = hilbert_schmidt(vec_k, kraus_on_vec_i)
     
     return super_op
 
-def rho_to_vector(
-    rho: np.ndarray,
+def mat_to_vec(
+    mat: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
 
     """ 
-    Gives a density matrix rho as a vector in a user-defined 
+    Gives a matrix mat as a vector in a user-defined 
     Hilbert-Schmidt basis via the function hs_basis.
     """
     
-    d = rho.shape[0]
+    d = mat.shape[0]
 
-    rho_vec = np.zeros(d**2, dtype=complex)
+    mat_vec = np.zeros(d**2, dtype=complex)
 
     for i in range(0, d**2):
         vec_i = hs_basis(i, d)
-        rho_vec[i] = hilbert_schmidt(vec_i, rho)
+        mat_vec[i] = hilbert_schmidt(vec_i, mat)
     
-    return rho_vec
+    return mat_vec
 
-def vector_to_rho(
-    rho_vec: np.ndarray,
+def vec_to_mat(
+    mat_vec: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
 
     """ 
-    Converts a vectorized density matrix rho_vec written in a 
-    Hilbert-Schmidt basis, defined by the function hs_basis, 
-    in a standard matrix representation of a density matrix.
+    Converts a vectorized matrix mat_vec written in a 
+    certain Hilbert-Schmidt basis, defined by the function hs_basis, 
+    in a standard matrix representation.
     """
     
-    d = int(np.sqrt(rho_vec.shape[0]))
+    d = int(np.sqrt(mat_vec.shape[0]))
 
-    rho = 0
+    mat = 0
 
     for i in range(0, d**2):
-        rho += rho_vec[i]*hs_basis(i, d)
+        mat += mat_vec[i]*hs_basis(i, d)
     
-    return rho
+    return mat
 
 

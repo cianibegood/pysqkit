@@ -265,7 +265,7 @@ class TomoEnvOld:
     def __init__(
         self,
         system = None,
-        # definition_type: str = None,
+        definition_type: str = '2system',
         # nb_levels: Union[int, Iterable[int]] = None ,
         # param_syst = None,
         # table_states = None,
@@ -287,7 +287,7 @@ class TomoEnvOld:
                 
             #     #def type
             #     assert definition_type in ['U', 'kraus'] #'2-qubit simu']
-            #     self._definition_type = definition_type
+            self._definition_type = definition_type
                 
             #     #nb_levels and d
             #     if isinstance(nb_levels, int):

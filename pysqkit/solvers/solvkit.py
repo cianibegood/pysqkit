@@ -13,6 +13,7 @@ def integrate(
     pulse: List[np.ndarray],  # we could add the option to give it analitically
     jump_op: List[qtp.qobj.Qobj],
     solver: str,
+    options: qtp.solver.Options=None
 ) -> qtp.solver.Result:
 
     if len(drive) != len(pulse):
@@ -32,7 +33,7 @@ def integrate(
         h.append([drive[k], pulse[k]])
 
     if solver == "mesolve":
-        result = qtp.mesolve(h, state_in, tlist, jump_op)
+        result = qtp.mesolve(h, state_in, tlist, jump_op, options=options)
 
     return result
 
