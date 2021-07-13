@@ -67,6 +67,8 @@ class TomoEnv:
             self._table_states = [system.state(n_th(self._nb_levels, n), \
                 as_qobj = True)[1] for n in range(self._d)] 
             
+            self._dims_qobj = self._table_states[0].dims
+            
             self._options = options
                            
     @property
@@ -127,8 +129,6 @@ class TomoEnv:
 
         d = len(input_states)
 
-        dims_qobj = self._table_states[0].dims
-
         basis_i = hs_basis(i, d)
         eigvals, eigvecs = np.linalg.eig(basis_i)
         evolved_basis_i = 0
@@ -136,7 +136,7 @@ class TomoEnv:
             iso_eigvec = 0
             for m in range(0, d):
                 iso_eigvec += eigvecs[m, n]*input_states[m]
-            iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=dims_qobj)
+            iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=self._dims_qobj)
             rho_iso_eigvec_qobj = iso_eigvec_qobj*iso_eigvec_qobj.dag()
             evolved_iso_eigvec = self.simu(rho_iso_eigvec_qobj)
             evolved_basis_i += eigvals[n]*evolved_iso_eigvec[:, :]
@@ -147,9 +147,13 @@ class TomoEnv:
         input_states: List[np.ndarray], 
         hs_basis: Callable[[int, int], np.ndarray],
         as_qobj=False
-    ):
+    ) -> np.ndarray:
+    
         """
-
+        Returns the superoperator associated with the time-evolution 
+        for states in input_states. The output_states are assumed to be 
+        the same as the input states. The superoperator is written in the 
+        Hilbert-Schmidt basis defined via the function hs_basis.
         """
 
         d = len(input_states)
@@ -164,5 +168,21 @@ class TomoEnv:
                 superoperator[k, i] = hilbert_schmidt(basis[k], evolved_basis)
         
         return superoperator
+    
+    def leakage(
+        self,
+        input_states: List[np.ndarray]
+    ) -> float:
+        proj_comp = 0
+        dim_subspace = len(input_states)
+        for n in range(0, dim_subspace):
+                state_qobj = qtp.Qobj(inpt=input_states[n], 
+                                      dims=self._dims_qobj)
+                proj_comp += state_qobj*state_qobj.dag()
+        res = self.simu(proj_comp/dim_subspace)
+        return 1 - qtp.expect(proj_comp, res)
+
+
+        
 
         
