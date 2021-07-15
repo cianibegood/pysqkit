@@ -28,8 +28,8 @@ class Fluxonium(Qubit):
         induct_energy: float,
         joseph_energy: float,
         ext_flux: Optional[float] = 0.5,
-        diel_loss_tan: Optional[float] = 7e-6,
-        env_temp: Optional[float] = 0.02,
+        diel_loss_tan: Optional[float] = 0.0,
+        env_thermal_energy: Optional[float] = 0.0, #kb T
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
@@ -40,7 +40,7 @@ class Fluxonium(Qubit):
         self._ext_flux = ext_flux
 
         self.diel_loss_tan = diel_loss_tan
-        self.env_temp = env_temp
+        self.env_thermal_energy = env_thermal_energy
 
         if basis is None:
             basis = fock_basis(dim_hilbert)
@@ -50,7 +50,7 @@ class Fluxonium(Qubit):
                 raise NotImplementedError("Basis not supported yet")
 
         super().__init__(label=label, basis=basis)
-
+        
         self._loss_rates = dict(dielectric=self.dielectric_rates)
 
     def __copy__(self) -> "Fluxonium":
@@ -61,7 +61,7 @@ class Fluxonium(Qubit):
             self.joseph_energy,
             self.ext_flux,
             self.diel_loss_tan,
-            self.env_temp,
+            self.env_thermal_energy,
             basis=copy(self.basis),
         )
         qubit_copy._drives = {
@@ -299,20 +299,20 @@ class Fluxonium(Qubit):
         if not isinstance(self.diel_loss_tan, float):
             raise ValueError(
                 "Dielectric loss tangent expected as a"
-                "float value, instead got {}".format(type(self._qdiel))
+                "float value, instead got {}".format(type(self.diel_loss_tan))
             )
-        if not isinstance(self.env_temp, float):
+        if not isinstance(self.env_thermal_energy, float):
             raise ValueError(
-                "Environment temperature expected as a"
-                "float value, instead got {}".format(type(self._beta))
+                "Environment thermal energy expected as a"
+                "float value, instead got {}".format(\
+                    type(self.env_thermal_energy))
             )
-        qdiel = 1 / self.diel_loss_tan
-        beta = 1 / temperature_to_thermalenergy(self.env_temp)
 
-        if qdiel < 0 or beta < 0:
+
+        if self.diel_loss_tan < 0 or self.env_thermal_energy < 0:
             raise ValueError(
-                "Quality factor qdiel and (absolute) "
-                "inverse temperature beta must be positive."
+                "Loss tangen and (absolute) "
+                "thermal energy kb*T must be positive."
             )
 
         if level_k == level_m:
@@ -327,6 +327,9 @@ class Fluxonium(Qubit):
                 "Eigenstate labels k and m must be smaller than"
                 " the Hilbert space dimension."
             )
+        
+        if self.diel_loss_tan == 0:
+            return 0.0, 0.0
 
         if level_k > level_m:
             level_k, level_m = level_m, level_k
@@ -337,8 +340,8 @@ class Fluxonium(Qubit):
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
-        gamma = self._ec * energy_diff ** 2 * phi_km ** 2 / (4 * qdiel)
-        nth = average_photon(energy_diff * self._ec, beta)
+        gamma = self.diel_loss_tan*self._ec * energy_diff ** 2 * phi_km ** 2 / 4
+        nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
         relaxation_rate = gamma * (nth + 1)
         excitation_rate = gamma * nth

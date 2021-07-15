@@ -1,6 +1,6 @@
 from abc import ABC
 from math import exp
-from typing import List, final
+from typing import List
 
 import numpy as np
 

@@ -33,7 +33,7 @@ class TomoEnv:
     def __init__(
         self,
         system: QubitSystem,
-        jump_op = [],
+        #jump_op = [],
         store_outputs = False,
         options: qtp.solver.Options=None
         ):
@@ -50,7 +50,8 @@ class TomoEnv:
             self._n_qubits = len(self._nb_levels)
             self._d = int(np.prod(self._nb_levels))
             self._system = system
-            self._jump_op = jump_op
+            self._jump_op = [op for qubit in \
+                system for op in qubit.collapse_ops(as_qobj=True)]
                 
             self._table_states = [system.state(n_th(self._nb_levels, n), \
                 as_qobj = True)[1] for n in range(self._d)] 
@@ -89,7 +90,8 @@ class TomoEnv:
                     
         for qubit in self._system:
             if qubit.is_driven:
-                for label, drive in qubit.drives.items():
+                #for label, drive in qubit.drives.items():
+                for drive in qubit.drives.items():
                     hamil_drive.append(drive.hamiltonian(as_qobj=True))
                     pulse_drive.append(drive.eval_pulse())
                     
