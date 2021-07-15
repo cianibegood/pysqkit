@@ -90,8 +90,7 @@ class TomoEnv:
                     
         for qubit in self._system:
             if qubit.is_driven:
-                #for label, drive in qubit.drives.items():
-                for drive in qubit.drives.items():
+                for label, drive in qubit.drives.items():
                     hamil_drive.append(drive.hamiltonian(as_qobj=True))
                     pulse_drive.append(drive.eval_pulse())
                     

@@ -6,12 +6,14 @@ from . import operators
 from . import bases
 from . import util
 from . import solvers
+from . import tomography
 
 __all__ = [
     "qubits",
     "couplers",
     "drives",
     "operators",
+    "tomography",
     "bases",
     "Qubit",
     "QubitSystem",
