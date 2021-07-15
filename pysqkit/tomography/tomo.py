@@ -1,28 +1,16 @@
-from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
-import os
-import sys
-
-import time
-import datetime
+from typing import Callable, List
 
 import qutip as qtp 
 import numpy as np 
-import matplotlib.pyplot as plt
-from scipy import linalg as la
-import cmath
 
-# import pysqkit
 from pysqkit.solvers.solvkit import integrate
 from pysqkit.systems.system import QubitSystem
 from pysqkit.util.linalg import hilbert_schmidt
-from pysqkit.util.transformations import iso_basis
+from pysqkit.util.hsbasis import iso_basis
 
-
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-   
-   
-##Tools
-#general
+import multiprocessing
+from functools import partial
+    
 
 def n_th(maxs, n):  
     '''returns n-th tuple with the i_th term varying between 0 and maxs[i]'''
@@ -146,14 +134,16 @@ class TomoEnv:
         self, 
         input_states: List[np.ndarray], 
         hs_basis: Callable[[int, int], np.ndarray],
-        as_qobj=False
+        n_process: int=1
     ) -> np.ndarray:
     
         """
         Returns the superoperator associated with the time-evolution 
         for states in input_states. The output_states are assumed to be 
         the same as the input states. The superoperator is written in the 
-        Hilbert-Schmidt basis defined via the function hs_basis.
+        Hilbert-Schmidt basis defined via the function hs_basis. 
+        The function can be run in parallel by specifying the number of 
+        processes n_process, which is 1 by default.
         """
 
         d = len(input_states)
@@ -162,10 +152,22 @@ class TomoEnv:
         for i in range(0, d**2):
             basis.append(iso_basis(i, input_states, hs_basis))
         
+        index_list = np.arange(0, d**2)
+        
+        pool = multiprocessing.Pool(processes=n_process)
+
+        func = partial(self.evolve_hs_basis, input_states=input_states,
+                       hs_basis=hs_basis)
+
+        evolved_basis = pool.map(func, index_list, 
+                                 chunksize=int(d**2//n_process))
+
+        pool.close()
+        pool.join()
+        
         for i in range(0, d**2):
-            evolved_basis = self.evolve_hs_basis(i, input_states, hs_basis)
             for k in range(0, d**2):
-                superoperator[k, i] = hilbert_schmidt(basis[k], evolved_basis)
+                superoperator[k, i] = hilbert_schmidt(basis[k], evolved_basis[i])
         
         return superoperator
     
@@ -181,6 +183,25 @@ class TomoEnv:
                 proj_comp += state_qobj*state_qobj.dag()
         res = self.simu(proj_comp/dim_subspace)
         return 1 - qtp.expect(proj_comp, res)
+    
+    def seepage(
+        self,
+        input_states: List[np.ndarray]
+    ) -> float:
+        proj_comp = 0
+        dim_subspace = len(input_states)
+        for n in range(0, dim_subspace):
+                state_qobj = qtp.Qobj(inpt=input_states[n], 
+                                      dims=self._dims_qobj)
+                proj_comp += state_qobj*state_qobj.dag()
+        ide = qtp.Qobj(inpt=np.identity(self._d), dims=proj_comp.dims)
+        proj_leak = ide - proj_comp
+        dim_leak = self._d - dim_subspace
+        res = self.simu(proj_leak/dim_leak)
+        return 1 - qtp.expect(proj_leak, res)
+
+        
+        
 
 
         
