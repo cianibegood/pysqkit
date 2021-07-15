@@ -20,12 +20,16 @@ def microwave_drive(
         )
 
     charge_op = qubit.charge_op()
+    pulse_func = pulse or pulses.cos_modulation
+
+    hilbert_dim = qubit.basis.sys_truncated_dims
 
     drive = Drive(
-        operator=charge_op,
-        pulse=pulse or pulses.cos_modulation,
         label=label,
+        operator=charge_op,
+        pulse=pulse_func,
         pulse_shape=pulse_shape,
+        hilbert_dim=hilbert_dim,
     )
 
     drive.set_params(**drive_params)
