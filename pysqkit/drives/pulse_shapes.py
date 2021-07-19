@@ -25,6 +25,10 @@ def gaussian_top(time: np.ndarray, rise_time: float):
     _rise_times = time < rise_time
     _fall_times = time >= max_time - rise_time
 
+    if rise_time == 0:
+        shape = np.ones(len(time))
+        return shape
+
     shape = np.ones(len(time))
     shape[_rise_times] = gaussian_edge(time[_rise_times], rise_time)
     shape[_fall_times] = gaussian_edge(
