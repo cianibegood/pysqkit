@@ -1,0 +1,9 @@
+-----------------------------------------------------------------
+Infos
+-----------------------------------------------------------------
+The scan as a function of drive frequency and drive strength is 
+obtained for t_tot = 60 ns and t_rise = 15 ns
+----------------------------------------------------------------
+The scan as a function of rising time is obtained by optimizing 
+the drive frequency and drive strength as in the file 
+scan_t_rise.ipynb and setting t_tot = 60 ns
