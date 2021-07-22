@@ -132,3 +132,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .pdf
+docs/research/transmon_fluxonium/ficheux_inspired_gate/data_and_plots/scan_drive_freq_strength.pdf
