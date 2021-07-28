@@ -4,7 +4,6 @@
 #-----------------------------------------------------------------------------
 
 import numpy as np
-from pysqkit.util.linalg import hilbert_schmidt
 from typing import List, Callable, Union
 
 def weyl(

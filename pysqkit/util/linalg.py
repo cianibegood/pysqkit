@@ -72,7 +72,7 @@ def transform_basis(operator, basis_tranformation):
     )
     return transformed_op
 
-def hilbert_schmidt(
+def hilbert_schmidt_prod(
     a: np.ndarray,
     b: np.ndarray,
 )-> complex:

@@ -1,90 +1,48 @@
 from typing import Callable, List
 
 import qutip as qtp 
-import numpy as np 
+import numpy as np
+import time
 
 from pysqkit.solvers.solvkit import integrate
 from pysqkit.systems.system import QubitSystem
-from pysqkit.util.linalg import hilbert_schmidt
+from pysqkit.util.linalg import hilbert_schmidt_prod
 from pysqkit.util.hsbasis import iso_basis
 
 import multiprocessing
 from functools import partial
-    
-
-def n_th(maxs, n):  
-    '''returns n-th tuple with the i_th term varying between 0 and maxs[i]'''
-    temp = np.zeros(len(maxs))
-    for i in range(0, len(temp)):
-        temp[i] = (n//np.prod(maxs[i+1:]))%np.prod(maxs[i])
-    
-    res = [int(k) for k in temp]
-    return res
-    
-def index_from_label(maxs, label):
-    return int(np.sum([label[i] * np.prod(maxs[i+1:])  \
-        for i in range(len(label))]))
-
-
-##  Tomo env class 
-    
-    
+         
 class TomoEnv:   
     def __init__(
         self,
         system: QubitSystem,
-        #jump_op = [],
-        store_outputs = False,
+        time: np.ndarray,
         options: qtp.solver.Options=None
         ):
-            '''  Either system is not None and it's all we need OR 
-            system is None and all the rest must be defined
-            
-            table_states is None if we want to take the bare basis'''
-            
-            self.store_outputs = store_outputs
-            self.nb_gate_call = 0
-            
-            
-            self._nb_levels = [qubit.dim_hilbert for qubit in system.qubits]
-            self._n_qubits = len(self._nb_levels)
-            self._d = int(np.prod(self._nb_levels))
+            """
+            Class to perform tomography
+            """            
+        
             self._system = system
+            self._time = time
             self._jump_op = [op for qubit in \
                 system for op in qubit.collapse_ops(as_qobj=True)]
-                
-            self._table_states = [system.state(n_th(self._nb_levels, n), \
-                as_qobj = True)[1] for n in range(self._d)] 
             
-            self._dims_qobj = self._table_states[0].dims
+            q_dims = [qubit.dim_hilbert for qubit in system.qubits]
+            self._dims_qobj = [q_dims, [1]*system.size]
             
             self._options = options
-                           
-    @property
-    def nb_levels(self):
-        return self._nb_levels
-    
-    @property
-    def n_qubits(self):
-        return self._n_qubits
-    
-    @property
-    def d(self):
-        return self._d
         
     @property
-    def system(self): #what characterizes the env
+    def system(self):
         return self._system
     
     @property
-    def jump_op(self): #what characterizes the env
-        return self._jump_op
-    
-    def simu(self, state_init):
-        tlist = [qubit.drives[drive_key].params['time'] for \
-            qubit in self._system for drive_key in qubit.drives.keys()][0] 
+    def time(self):
+        return self._time 
+
+    def simulate(self, state_init):
         hamil0 = self._system.hamiltonian(as_qobj=True)
-                    
         hamil_drive = []
         pulse_drive = []
                     
@@ -94,10 +52,9 @@ class TomoEnv:
                     hamil_drive.append(drive.hamiltonian(as_qobj=True))
                     pulse_drive.append(drive.eval_pulse())
                     
-        jump_list = self._jump_op 
-                    
-        result = integrate(tlist*2*np.pi, state_init, hamil0, hamil_drive,
-                           pulse_drive, jump_list, "mesolve", options=self._options)
+        result = integrate(self._time, state_init, hamil0, hamil_drive,
+                           pulse_drive, self._jump_op , 
+                           "mesolve", options=self._options)
                     
         res = result.states[-1]
         return res   
@@ -122,12 +79,13 @@ class TomoEnv:
         eigvals, eigvecs = np.linalg.eig(basis_i)
         evolved_basis_i = 0
         for n in range(0, d):
-            iso_eigvec = 0
-            for m in range(0, d):
-                iso_eigvec += eigvecs[m, n]*input_states[m]
+            # iso_eigvec = 0
+            # for m in range(0, d):
+            #     iso_eigvec += eigvecs[m, n]*input_states[m]
+            iso_eigvec = np.einsum('i,ij->j', eigvecs[:, n], input_states)
             iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=self._dims_qobj)
             rho_iso_eigvec_qobj = iso_eigvec_qobj*iso_eigvec_qobj.dag()
-            evolved_iso_eigvec = self.simu(rho_iso_eigvec_qobj)
+            evolved_iso_eigvec = self.simulate(rho_iso_eigvec_qobj)
             evolved_basis_i += eigvals[n]*evolved_iso_eigvec[:, :]
         return evolved_basis_i
     
@@ -149,9 +107,11 @@ class TomoEnv:
 
         d = len(input_states)
         superoperator = np.zeros([d**2, d**2], dtype=complex)
-        basis = [] 
-        for i in range(0, d**2):
-            basis.append(iso_basis(i, input_states, hs_basis))
+        # basis = [] 
+        # for i in range(0, d**2):
+        #     basis.append(iso_basis(i, input_states, hs_basis))
+        
+        basis = [iso_basis(i, input_states, hs_basis) for i in range(0, d**2)]
         
         index_list = np.arange(0, d**2)
         
@@ -168,7 +128,7 @@ class TomoEnv:
         
         for i in range(0, d**2):
             for k in range(0, d**2):
-                superoperator[k, i] = hilbert_schmidt(basis[k], evolved_basis[i])
+                superoperator[k, i] = hilbert_schmidt_prod(basis[k], evolved_basis[i])
         
         return superoperator
     
@@ -176,29 +136,30 @@ class TomoEnv:
         self,
         input_states: List[np.ndarray]
     ) -> float:
-        proj_comp = 0
         dim_subspace = len(input_states)
-        for n in range(0, dim_subspace):
-                state_qobj = qtp.Qobj(inpt=input_states[n], 
-                                      dims=self._dims_qobj)
-                proj_comp += state_qobj*state_qobj.dag()
-        res = self.simu(proj_comp/dim_subspace)
+        _proj_comp = np.einsum('ai, aj -> ij', input_states, 
+                               np.conj(input_states))
+        subsys_dims = list(q.dim_hilbert for q in self._system)
+        proj_comp = qtp.Qobj(inpt=_proj_comp, 
+                             dims=[subsys_dims, subsys_dims], isherm=True)
+        res = self.simulate(proj_comp/dim_subspace)
         return 1 - qtp.expect(proj_comp, res)
     
     def seepage(
         self,
         input_states: List[np.ndarray]
     ) -> float:
-        proj_comp = 0
         dim_subspace = len(input_states)
-        for n in range(0, dim_subspace):
-                state_qobj = qtp.Qobj(inpt=input_states[n], 
-                                      dims=self._dims_qobj)
-                proj_comp += state_qobj*state_qobj.dag()
-        ide = qtp.Qobj(inpt=np.identity(self._d), dims=proj_comp.dims)
+        _proj_comp = np.einsum('ai, aj -> ij', input_states, 
+                               np.conj(input_states))
+        subsys_dims = list(q.dim_hilbert for q in self._system)
+        proj_comp = qtp.Qobj(inpt=_proj_comp, 
+                             dims=[subsys_dims, subsys_dims], isherm=True)
+        ide = qtp.Qobj(inpt=np.identity(self._system.dim_hilbert), 
+                       dims=proj_comp.dims, isherm=True)
         proj_leak = ide - proj_comp
-        dim_leak = self._d - dim_subspace
-        res = self.simu(proj_leak/dim_leak)
+        dim_leak = self._system.dim_hilbert - dim_subspace
+        res = self.simulate(proj_leak/dim_leak)
         return 1 - qtp.expect(proj_leak, res)
 
         

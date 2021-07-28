@@ -88,7 +88,7 @@ def plot_scans(
 
 # %%
 title_inf = '$1 - f_{\mathrm{gate}}$'
-file_inf = 'scan_drive_freq_strength_infidelity.pdf'
+file_inf = 'scan_drive_freq_strength_infidelity_prova.pdf'
 plot_scans(freq_d_vec, eps_d_vec, inf_gate_rbf, plot_setup, 
            title_inf, file_inf, save)
 

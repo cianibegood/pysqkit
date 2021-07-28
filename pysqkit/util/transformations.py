@@ -4,7 +4,7 @@
 #-----------------------------------------------------------------------------
 
 import numpy as np
-from pysqkit.util.linalg import hilbert_schmidt
+from pysqkit.util.linalg import hilbert_schmidt_prod
 from typing import List, Callable, Union
 
 def kraus_to_ptm(kraus, basis_in, basis_out):
@@ -47,7 +47,7 @@ def kraus_to_super(
 
         for k in range(0, d**2):
             vec_k = hs_basis(k, d)
-            super_op[k, i] = hilbert_schmidt(vec_k, kraus_on_vec_i)
+            super_op[k, i] = hilbert_schmidt_prod(vec_k, kraus_on_vec_i)
     
     return super_op
 
@@ -67,7 +67,7 @@ def mat_to_vec(
 
     for i in range(0, d**2):
         vec_i = hs_basis(i, d)
-        mat_vec[i] = hilbert_schmidt(vec_i, mat)
+        mat_vec[i] = hilbert_schmidt_prod(vec_i, mat)
     
     return mat_vec
 
