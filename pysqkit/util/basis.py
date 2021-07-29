@@ -1,5 +1,5 @@
 from itertools import product
-from pysqkit.util.linalg import hilbert_schmidt
+from pysqkit.util.linalg import hilbert_schmidt_prod
 from typing import List
 
 import numpy as np

@@ -19,5 +19,5 @@ __all__ = [
     "QubitSystem",
     "Coupling",
     "util",
-    "solvers",
+    "solvers"
 ]

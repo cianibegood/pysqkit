@@ -2,6 +2,7 @@ import numpy as np
 from scipy import constants
 
 
+
 def average_photon(
     energy: float, 
     thermal_energy: float,
