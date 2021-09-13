@@ -1,7 +1,6 @@
 #-----------------------------------------------------------------------------
 # File that contains auxiliary functions to simplify the calculations
-# needed to study the two-qubit gate between a transmon and a fluxonium 
-# using the |1_t 3_f>-|0_t 4_f> inspired by the fluxonium-fluxonium gate 
+# needed to study the two-qubit gate between two fluxonia 
 # described in Ficheux et al. Phys. Rev. X 11, 021026 (2021)
 #-----------------------------------------------------------------------------
 
@@ -116,8 +115,9 @@ def func_to_minimize(
     rabi_first_transition, delta_gate - rabi_first_transition]/delta_gate
     x0 : np.ndarray([eps_reference, drive_freq]) represents the 
          parameters to be minimized.
-    levels_first_transition : List with the labels of the first transition whose
-                              generalized Rabi frequency has to be matched
+    levels_first_transition : List with the labels of the first transition 
+                              whose generalized Rabi frequency has to 
+                              be matched
     levels_second_transition : List with the labels of the second transition 
                                whose generalized Rabi frequency has to be 
                                matched
@@ -131,8 +131,12 @@ def func_to_minimize(
     eps = {}
     for qubit in qubit_labels:
         eps[qubit] = x0[0]*eps_ratio_dict[qubit]
-    rabi_first_transition = generalized_rabi_frequency(levels_first_transition, eps, x0[1], system)
-    rabi_second_transition = generalized_rabi_frequency(levels_second_transition, eps, x0[1], system)
+    rabi_first_transition = \
+        generalized_rabi_frequency(levels_first_transition, 
+                                   eps, x0[1], system)
+    rabi_second_transition = \
+        generalized_rabi_frequency(levels_second_transition, 
+                                   eps, x0[1], system)
     delta_gate = delta(system)
     y = np.sqrt( (rabi_first_transition - rabi_second_transition)**2 + \
                 (rabi_first_transition - delta_gate)**2)
@@ -142,8 +146,10 @@ def single_qubit_corrections(
     sup_op: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
-    sigma_m1 = tensor_prod([np.array([[0.0, 0.0], [1.0, 0.0]]), np.array([[1.0, 0.0], [0.0, 0.0]])])
-    sigma_m2 = tensor_prod([np.array([[1.0, 0.0], [0.0, 0.0]]), np.array([[0.0, 0.0], [1.0, 0.0]])])
+    sigma_m1 = tensor_prod([np.array([[0.0, 0.0], [1.0, 0.0]]), 
+                           np.array([[1.0, 0.0], [0.0, 0.0]])])
+    sigma_m2 = tensor_prod([np.array([[1.0, 0.0], [0.0, 0.0]]), 
+                           np.array([[0.0, 0.0], [1.0, 0.0]])])
     sigma_m1_vec = trf.mat_to_vec(sigma_m1, hs_basis)
     sigma_m2_vec = trf.mat_to_vec(sigma_m2, hs_basis)
     evolved_sigma_m1_vec = sup_op.dot(sigma_m1_vec)

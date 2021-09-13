@@ -127,6 +127,37 @@ class Qubit(ABC):
         _, eig_states = self.eig_states(levels=self.dim_hilbert, expand=False)
         self.basis.transform(eig_states)
         self.basis.truncate(num_levels)
+    
+    def state(
+        self,
+        label: str,
+        *,
+        as_xarray: Optional[bool] = False,
+        as_qobj: Optional[bool] = False,
+    ) -> Union[np.ndarray, Qobj]:
+        eig_vals, eig_vecs = self.eig_states()
+        ind = int(label)
+        energy, state = eig_vals[ind], eig_vecs[ind]
+
+        if as_qobj:
+            q_dims = self.dim_hilbert #[qubit.dim_hilbert for qubit in self._qubits]
+
+            qobj_state = Qobj(
+                inpt=state,
+                dims=[[q_dims], [1]],
+                shape=[np.prod(q_dims), 1],
+                type="ket",
+            )
+
+            return energy, qobj_state
+        if as_xarray:
+            state_arr = xr.DataArray(
+                state,
+                dims=["basis_ind"],
+                coords=dict(label=label, energy=energy),
+            )
+            return state_arr
+        return energy, state
 
     def mat_elements(
         self,
