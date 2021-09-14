@@ -1,11 +1,11 @@
-from typing import Callable, List
+from typing import Callable, List, Union
 
 import qutip as qtp 
 import numpy as np
 import time
 
 from pysqkit.solvers.solvkit import integrate
-from pysqkit.systems.system import QubitSystem
+from pysqkit.systems.system import QubitSystem, Qubit
 from pysqkit.util.linalg import hilbert_schmidt_prod
 from pysqkit.util.hsbasis import iso_basis
 
@@ -15,7 +15,7 @@ from functools import partial
 class TomoEnv:   
     def __init__(
         self,
-        system: QubitSystem,
+        system: Union[Qubit, QubitSystem],
         time: np.ndarray,
         options: qtp.solver.Options=None
         ):
@@ -25,11 +25,16 @@ class TomoEnv:
         
             self._system = system
             self._time = time
-            self._jump_op = [op for qubit in \
-                system for op in qubit.collapse_ops(as_qobj=True)]
             
-            q_dims = [qubit.dim_hilbert for qubit in system.qubits]
-            self._dims_qobj = [q_dims, [1]*system.size]
+            if isinstance(system, QubitSystem):
+                self._jump_op = [op for qubit in \
+                    system for op in qubit.collapse_ops(as_qobj=True)]
+                q_dims = [qubit.dim_hilbert for qubit in system.qubits]
+                self._dims_qobj = [q_dims, [1]*system.size]
+            elif isinstance(system, Qubit):
+                self._jump_op = system.collapse_ops(as_qobj=True)
+                q_dims = [system.dim_hilbert]
+                self._dims_qobj = [q_dims, [1]]
             
             self._options = options
         
@@ -41,18 +46,24 @@ class TomoEnv:
     def time(self):
         return self._time 
 
-    def simulate(self, state_init):
+    def simulate(self, state_in):
         hamil0 = self._system.hamiltonian(as_qobj=True)
         hamil_drive = []
         pulse_drive = []
-                    
-        for qubit in self._system:
-            if qubit.is_driven:
-                for label, drive in qubit.drives.items():
-                    hamil_drive.append(drive.hamiltonian(as_qobj=True))
-                    pulse_drive.append(drive.eval_pulse())
-                    
-        result = integrate(self._time, state_init, hamil0, hamil_drive,
+
+        if isinstance(self._system, QubitSystem):
+            for qubit in self._system:
+                if qubit.is_driven:
+                    for label, drive in qubit.drives.items():
+                        hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                        pulse_drive.append(drive.eval_pulse())
+        elif isinstance(self._system, Qubit):
+            if self._system.is_driven:
+                for label, drive in self._system.drives.items():
+                        hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                        pulse_drive.append(drive.eval_pulse())
+              
+        result = integrate(self._time, state_in, hamil0, hamil_drive,
                            pulse_drive, self._jump_op , 
                            "mesolve", options=self._options)
                     
@@ -78,6 +89,7 @@ class TomoEnv:
         basis_i = hs_basis(i, d)
         eigvals, eigvecs = np.linalg.eig(basis_i)
         evolved_basis_i = 0
+
         for n in range(0, d):
             # iso_eigvec = 0
             # for m in range(0, d):
@@ -112,16 +124,13 @@ class TomoEnv:
         #     basis.append(iso_basis(i, input_states, hs_basis))
         
         basis = [iso_basis(i, input_states, hs_basis) for i in range(0, d**2)]
-        
         index_list = np.arange(0, d**2)
-        
-        pool = multiprocessing.Pool(processes=n_process)
 
+        pool = multiprocessing.Pool(processes=n_process)
         func = partial(self.evolve_hs_basis, input_states=input_states,
                        hs_basis=hs_basis)
 
-        evolved_basis = pool.map(func, index_list, 
-                                 chunksize=int(d**2//n_process))
+        evolved_basis = pool.map(func, index_list, chunksize=int(d**2//n_process))
 
         pool.close()
         pool.join()
@@ -139,9 +148,14 @@ class TomoEnv:
         dim_subspace = len(input_states)
         _proj_comp = np.einsum('ai, aj -> ij', input_states, 
                                np.conj(input_states))
-        subsys_dims = list(q.dim_hilbert for q in self._system)
+        
+        if isinstance(self._system, QubitSystem):
+            subsys_dims = list(q.dim_hilbert for q in self._system)
+        elif isinstance(self._system, Qubit):
+            subsys_dims = [self._system.dim_hilbert]
+
         proj_comp = qtp.Qobj(inpt=_proj_comp, 
-                             dims=[subsys_dims, subsys_dims], isherm=True)
+                                 dims=[subsys_dims, subsys_dims], isherm=True)    
         res = self.simulate(proj_comp/dim_subspace)
         return 1 - qtp.expect(proj_comp, res)
     

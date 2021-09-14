@@ -104,6 +104,10 @@ def single_qubit_corrections(
     sup_op: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
 ) -> np.ndarray:
+    # WARNING: AC I am really puzzled by this...if I use the analog
+    # of this for single-qubit gate I get the wrong result and
+    # we should actually use sigma_plus...???
+
     sigma_m1 = tensor_prod([np.array([[0.0, 0.0], [1.0, 0.0]]), 
                            np.array([[1.0, 0.0], [0.0, 0.0]])])
     sigma_m2 = tensor_prod([np.array([[1.0, 0.0], [0.0, 0.0]]), 

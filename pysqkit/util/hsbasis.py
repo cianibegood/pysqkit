@@ -23,19 +23,33 @@ def weyl(
     if xi_x >= d or xi_z >= d:
         raise ValueError("Qudit Pauli labels out of range.")
 
-    if d <= 2:
-        raise ValueError("The qudit dimension d must be larger than 2.")
+    if d <= 1 or not isinstance(d, int):
+        raise ValueError("The qudit dimension d must be an integer" 
+                         " larger than 1.")
+ 
+    if d > 2:
+        omega = np.exp(2*np.pi*1j/d)
+        z = np.zeros([d, d], dtype=complex)
+        x = np.zeros([d, d], dtype=complex)
 
-    omega = np.exp(2*np.pi*1j/d)
-    z = np.zeros([d, d], dtype=complex)
-    x = np.zeros([d, d], dtype=complex)
-    for k in range(0, d):
-        z[k, k] = omega**k
-        x[np.mod(k + 1, d), k] = 1
-    z_pow = np.linalg.matrix_power(z, xi_z)
-    x_pow = np.linalg.matrix_power(x, xi_x)
+        for k in range(0, d):
+            z[k, k] = omega**k
+            x[np.mod(k + 1, d), k] = 1
 
-    return 1/np.sqrt(d)*omega**(-(d + 1)/2*xi_x*xi_z)*x_pow.dot(z_pow)
+        z_pow = np.linalg.matrix_power(z, xi_z)
+        x_pow = np.linalg.matrix_power(x, xi_x)
+
+        return 1/np.sqrt(d)*omega**(-(d + 1)/2*xi_x*xi_z)*x_pow.dot(z_pow)
+    
+    elif d == 2:
+        z = np.array([[1, 0], [0, -1]], dtype=complex)
+        x = np.array([[0, 1], [1, 0]])
+        z_pow = np.linalg.matrix_power(z, xi_z)
+        x_pow = np.linalg.matrix_power(x, xi_x)
+
+        return 1/np.sqrt(d)*1j**(xi_x*xi_z)*x_pow.dot(z_pow)
+        
+
 
 def weyl_by_index(
     i: int,
