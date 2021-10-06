@@ -14,9 +14,6 @@ from ..util.phys import average_photon, temperature_to_thermalenergy
 
 _supported_bases = (FockBasis,)
 
-pi = np.pi
-
-
 class Transmon(Qubit):
     def __init__(
         self,
@@ -240,8 +237,8 @@ class SimpleTransmon(Qubit):
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
-        if max_freq <= 0:
-            raise ValueError("Frequency expected to be positive value greater than 0.")
+        if max_freq < 0:
+            raise ValueError("Frequency expected to be non-negative.")
         self._freq = max_freq
 
         if anharm > 0:
@@ -284,7 +281,7 @@ class SimpleTransmon(Qubit):
     @property
     def freq(self) -> float:
         res_freq = self._freq - self._anharm
-        shifted_freq = res_freq * np.sqrt(np.abs(np.cos(pi * self._ext_flux)))
+        shifted_freq = res_freq * np.sqrt(np.abs(np.cos(np.pi * self._ext_flux)))
         return shifted_freq + self._anharm
 
     @property
@@ -319,7 +316,7 @@ class SimpleTransmon(Qubit):
     def joseph_energy(self) -> float:
         res_freq = self._freq - self._anharm
         joseph_energy = (res_freq / np.sqrt(8 * self.charge_energy)) ** 2
-        det_joseph_energy = joseph_energy * np.abs(np.cos(pi * self.ext_flux))
+        det_joseph_energy = joseph_energy * np.abs(np.cos(np.pi * self.ext_flux))
         return det_joseph_energy
 
     @property
@@ -428,7 +425,7 @@ class SimpleTransmon(Qubit):
             )
             return qobj_op
         return hamil
-
+    
     def potential(self, phase: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         pot = -self.joseph_energy * np.cos(phase)
         return pot

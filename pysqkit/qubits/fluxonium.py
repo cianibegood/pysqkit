@@ -17,8 +17,6 @@ from ..util.phys import average_photon, temperature_to_thermalenergy
 
 _supported_bases = (FockBasis,)
 
-pi = np.pi
-
 
 class Fluxonium(Qubit):
     def __init__(
@@ -188,7 +186,7 @@ class Fluxonium(Qubit):
         if isinstance(self.basis, FockBasis):
             osc_hamil = self.res_freq * (self.basis.num_op + 0.5 * self.basis.id_op)
 
-            flux_phase = np.exp(1j * 2 * pi * self.ext_flux)
+            flux_phase = np.exp(1j * 2 * np.pi * self.ext_flux)
 
             exp_mat = flux_phase * la.expm(1j * self._get_flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)

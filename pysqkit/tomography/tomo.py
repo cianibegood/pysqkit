@@ -17,7 +17,8 @@ class TomoEnv:
         self,
         system: Union[Qubit, QubitSystem],
         time: np.ndarray,
-        options: qtp.solver.Options=None
+        options: qtp.solver.Options=None,
+        h0_frame: qtp.qobj.Qobj=None
         ):
             """
             Class to perform tomography
@@ -37,6 +38,7 @@ class TomoEnv:
                 self._dims_qobj = [q_dims, [1]]
             
             self._options = options
+            self.h0_frame = h0_frame
         
     @property
     def system(self):
@@ -47,7 +49,10 @@ class TomoEnv:
         return self._time 
 
     def simulate(self, state_in):
-        hamil0 = self._system.hamiltonian(as_qobj=True)
+        if self.h0_frame is None:
+            hamil0 = self._system.hamiltonian(as_qobj=True)
+        else:
+            hamil0 = self._system.hamiltonian(as_qobj=True) - self.h0_frame
         hamil_drive = []
         pulse_drive = []
 
@@ -78,7 +83,7 @@ class TomoEnv:
     ) -> np.ndarray:
         
         """
-        It returns the action of the quantum operation associated
+        Returns the action of the quantum operation associated
         with the time-evolution on the i-th element of a Hilbert-Schmidt
         basis define via the function hs_basis with computational 
         basis states in input_states.
