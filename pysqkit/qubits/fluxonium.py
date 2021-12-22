@@ -19,6 +19,23 @@ _supported_bases = (FockBasis,)
 
 
 class Fluxonium(Qubit):
+    
+    """
+    Description
+    --------------------------------------------------------------------------
+    Class associated with a fluxonium qubit first introduced in
+    V. Manucharyan et al., 	Science 326, 113-116 (2009). The fluxonium has
+    basic Hamiltonian
+
+    H = E_C q^2/2 + E_L \phi^2/2 - E_J \cos(\phi + 2 \pi \Phi_ext/\Phi_0)
+
+    with E_C the charging energy, E_L the inductive energy, E_J the 
+    Josephson energy, \Phi_ext the external flux, \Phi_0 = h/(2 e) the
+    superconducting flux quantum. q is the dimensionless charge 
+    and \phi the dimensionless flux and in the quantum setting they 
+    satisfy commutation relation [\phi, q] = i
+    """
+
     def __init__(
         self,
         label: str,
@@ -28,10 +45,49 @@ class Fluxonium(Qubit):
         ext_flux: Optional[float] = 0.5,
         diel_loss_tan: Optional[float] = 0.0,
         env_thermal_energy: Optional[float] = 0.0, #kb T
+        dephasing_times: Optional[dict] = None,
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
+        
+        """
+        Parameters
+        ----------------------------------------------------------------------
+        label: str
+            A string that identifies the qubit
+        charge_energy: float
+            Charging energy of the fluxonium circuit
+        induct_energy: float
+            Inductive energy of the fluxonium circuit
+        joseph_energy: float
+            Josephson energy of the fluxonium circuit
+        ext_flux: Optional[float] = 0.5,
+            External flux in units of \Phi_0. 
+        diel_loss_tan: Optional[float] = 0.0
+            Dielectric loss tangent that governs relaxation via dielectric
+            loss. See for instance 
+            L. B. Nguyen et al., Phys. Rev. X 9, 041041 (2019).
+        env_thermal_energy: Optional[float] = 0.0
+            Thermal energy of the environment k_b T.
+        dephasing_times: Optional[dict] = None
+            A dictionary that stores the pure dephasing times between the 
+            specified level and the reference level 0. For reference see
+            PRX Quantum 2, 030306 (2021).
+            Example:
+            dephasing_times = {'1': 100, '3': 10}
+            means that the 0-1 transition has pure dephasing time 100
+            and the 0-3 transition 10. All the other transitions 
+            will be assumed to have 0 pure dephasing time. 
+            The unit of measure has to be consistent with the previous data 
+            provided by the user.
+        basis: Optional[OperatorBasis] = None
+            Basis in which we want to write the operators. If not provided
+            it is assumed it is the Fock basis
+        dim_hilbert: Optional[int] = 100
+            Hilber space dimension       
+        """
+
         self._ec = charge_energy
         self._el = induct_energy
         self._ej = joseph_energy
@@ -39,6 +95,7 @@ class Fluxonium(Qubit):
 
         self.diel_loss_tan = diel_loss_tan
         self.env_thermal_energy = env_thermal_energy
+        self.dephasing_times = dephasing_times
 
         if basis is None:
             basis = fock_basis(dim_hilbert)
@@ -50,6 +107,7 @@ class Fluxonium(Qubit):
         super().__init__(label=label, basis=basis)
         
         self._loss_rates = dict(dielectric=self.dielectric_rates)
+        self._dephasing_rates = dict(pure_dephasing=self.pure_dephasing_rate)
 
     def __copy__(self) -> "Fluxonium":
         qubit_copy = self.__class__(
@@ -60,6 +118,7 @@ class Fluxonium(Qubit):
             self.ext_flux,
             self.diel_loss_tan,
             self.env_thermal_energy,
+            self.dephasing_times,
             basis=copy(self.basis),
         )
         qubit_copy._drives = {
@@ -122,6 +181,10 @@ class Fluxonium(Qubit):
     @property
     def loss_channels(self):
         return list(self._loss_rates.keys())
+    
+    @property
+    def dephasing_channels(self):
+        return list(self._dephasing_rates.keys())
 
     def _get_charge_op(self):
         charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
@@ -291,9 +354,17 @@ class Fluxonium(Qubit):
 
     def dielectric_rates(
         self,
-        level_k: int,
+        level_k: int, # Suggestion: shall we pass this to string?
         level_m: int,
     ) -> Tuple[float, float]:
+        
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the relaxation and excitation rate due 
+        to dielectric loss between two eigenstates
+        """
+               
         if not isinstance(self.diel_loss_tan, float):
             raise ValueError(
                 "Dielectric loss tangent expected as a"
@@ -344,7 +415,7 @@ class Fluxonium(Qubit):
         relaxation_rate = gamma * (nth + 1)
         excitation_rate = gamma * nth
 
-        return relaxation_rate, excitation_rate
+        return relaxation_rate, excitation_rate       
 
     def loss_rates(
         self,
@@ -372,7 +443,7 @@ class Fluxonium(Qubit):
         self,
         level_k: int,
         level_m: int,
-        loss_channels: Optional[List[str]] = None,
+        loss_channels: Optional[List[str]] = None
     ) -> Tuple[np.ndarray]:
         rates = self.loss_rates(level_k, level_m, loss_channels)
         _, states = self.eig_states((level_k, level_m), expand=False)
@@ -408,10 +479,127 @@ class Fluxonium(Qubit):
         level_pairs = combinations(range(self.dim_hilbert), 2)
         for level_pair in level_pairs:
             collapse_ops.extend(
-                self.loss_ops(*level_pair, loss_channels, as_qobj, expand=expand)
+                self.loss_ops(*level_pair, loss_channels, as_qobj, 
+                              expand=expand)
             )
         return collapse_ops
+    
+    def pure_dephasing_rate(
+        self, 
+        level: int,
+    ) -> float:
+        
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the pure dephasing rate between the level and the reference
+        ground state
 
+        Warning
+        ----------------------------------------------------------------------
+        This simply returns the corresponding 1/dephasing_time. 
+        Since this is not calculated within the class, the user has to 
+        guarantee that it is consistent with the other units of measure. 
+        """ 
+        
+        levels_id = str(level)
+
+        if levels_id in self.dephasing_times.keys():
+            return 1/self.dephasing_times[levels_id]
+        else:
+            return 0.0 
+    
+    def dephasing_rate(
+        self,
+        level,
+        dephasing_channels: Optional[List[str]] = None,
+    ) -> float:
+        
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the total pure dephasing rate of the level with respect to the 
+        reference ground state
+        """
+
+        if dephasing_channels is not None:
+            for channel in dephasing_channels:
+                if channel not in self.dephasing_channels:
+                    raise ValueError(
+                        "The provided channel {} is not supported "
+                        "by the fluxonium qubit.".format(channel)
+                    )
+
+        channels = dephasing_channels or self.dephasing_channels
+
+        channel_dephasing_rates = [
+            self._dephasing_rates[channel](level) for channel in channels
+        ]
+        total_rate = sum(channel_dephasing_rates)
+        return total_rate
+    
+    def _get_dephasing_op(
+        self,
+        dephasing_channels: Optional[List[str]] = None
+    ) -> np.ndarray:
+
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the multilevel dephasing operator
+
+        Z_dephasing = \sum_{i=1}^{n_levels} \sqrt{2 \gamma_i} |i><i|
+
+        where |i> denotes an eigenstate.
+        """
+
+        rate = {}
+
+        for level in range(1, self.dim_hilbert):
+            if self.dephasing_rate(level, dephasing_channels) != 0.0:
+                rate[str(level)] = \
+                    self.dephasing_rate(level, dephasing_channels)
+        
+        deph_op = np.zeros([self.dim_hilbert, self.dim_hilbert], dtype=complex)
+
+        _, eig_vecs = self.eig_states()
+
+        for level_id in rate.keys():
+            projector = np.outer(eig_vecs[int(level_id)], 
+                                 eig_vecs[int(level_id)].conj())
+            
+            deph_op += np.sqrt(2*rate[level_id])*projector
+        
+        return deph_op    
+    
+    def dephasing_op(
+        self,
+        dephasing_channels: Optional[List[str]] = None,
+        as_qobj: Optional[bool] = False,
+        *,
+        expand: Optional[bool] = True
+    ) -> Union[np.ndarray, Qobj]:
+
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the multilevel dephasing operator from the method 
+
+        _get_dephasing_op
+
+        The operator is either returned as a numpy array or as a qutip Qobj.        
+        """
+        
+        op = self._get_dephasing_op(dephasing_channels)
+
+        if expand:
+            op = self.basis.expand_op(op)
+        
+        if as_qobj:
+            qobj_op = self._qobj_oper(op, isherm=True)
+            return qobj_op
+        return op
+        
 
 def _get_trans_ops(in_state, out_state):
     down_op = np.outer(in_state, out_state.conj())
