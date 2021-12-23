@@ -263,7 +263,7 @@ class SimpleTransmon(Qubit):
             A string that identifies the qubit
         max_freq: float
             Maximum plasma frequency of the transmon 
-        anharmo: float
+        anharm: float
             Anharmonicity of the transmon
         ext_flux: Optional[float] = 0.5,
             External flux in units of \Phi_0. 
@@ -688,18 +688,19 @@ class SimpleTransmon(Qubit):
 
         rate = {}
 
+        
         for level in range(1, self.dim_hilbert):
             if self.dephasing_rate(level, dephasing_channels) != 0.0:
                 rate[str(level)] = \
                     self.dephasing_rate(level, dephasing_channels)
         
-        deph_op = np.zeros([self.dim_hilbert, self.dim_hilbert], dtype=complex)
+        deph_op = 0.0
 
-        _, eig_vecs = self.eig_states()
+        _, eig_vecs = self.eig_states(expand=False)
 
         for level_id in rate.keys():
             projector = np.outer(eig_vecs[int(level_id)], 
-                                 eig_vecs[int(level_id)].conj())
+                                eig_vecs[int(level_id)].conj())
             
             deph_op += np.sqrt(2*rate[level_id])*projector
         

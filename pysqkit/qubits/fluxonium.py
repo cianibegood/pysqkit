@@ -560,9 +560,9 @@ class Fluxonium(Qubit):
                 rate[str(level)] = \
                     self.dephasing_rate(level, dephasing_channels)
         
-        deph_op = np.zeros([self.dim_hilbert, self.dim_hilbert], dtype=complex)
-
-        _, eig_vecs = self.eig_states()
+        deph_op = 0.0
+        
+        _, eig_vecs = self.eig_states(expand=False) 
 
         for level_id in rate.keys():
             projector = np.outer(eig_vecs[int(level_id)], 

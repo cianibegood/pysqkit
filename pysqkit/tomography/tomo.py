@@ -28,12 +28,17 @@ class TomoEnv:
             self._time = time
             
             if isinstance(system, QubitSystem):
-                self._jump_op = [op for qubit in \
+                collapse_ops = [op for qubit in \
                     system for op in qubit.collapse_ops(as_qobj=True)]
+                dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
+                    for qubit in system]
+                self._jump_op = collapse_ops + dephasing_ops
                 q_dims = [qubit.dim_hilbert for qubit in system.qubits]
                 self._dims_qobj = [q_dims, [1]*system.size]
             elif isinstance(system, Qubit):
-                self._jump_op = system.collapse_ops(as_qobj=True)
+                collapse_ops = system.collapse_ops(as_qobj=True)
+                dephasing_op = [system.dephasing_op(as_qobj=True)]
+                self._jump_op = collapse_ops + dephasing_op
                 q_dims = [system.dim_hilbert]
                 self._dims_qobj = [q_dims, [1]]
             
@@ -69,7 +74,7 @@ class TomoEnv:
                         pulse_drive.append(drive.eval_pulse())
               
         result = integrate(self._time, state_in, hamil0, hamil_drive,
-                           pulse_drive, self._jump_op , 
+                           pulse_drive, self._jump_op, 
                            "mesolve", options=self._options)
                     
         res = result.states[-1]
