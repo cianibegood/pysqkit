@@ -10,7 +10,9 @@ from ..util.linalg import tensor_prod, transform_basis
 
 class OperatorBasis(ABC):
     """
-    NOTE: This class is a bit empty currently. We can remove it - I added it as we might in theory look at sparse operator, in which case that would be integrated here I think.
+    NOTE: This class is a bit empty currently. We can remove it - 
+    I added it as we might in theory look at sparse operator, 
+    in which case that would be integrated here I think.
     """
 
     def __init__(self, dim_hilbert: int):
