@@ -100,11 +100,6 @@ def delta(system: QubitSystem) -> float:
         (system.state('03')[0] - system.state('00')[0])
     return delta_gate 
 
-def delta_11_14(system: QubitSystem) -> float:
-    delta_gate = (system.state('14')[0] - system.state('11')[0]) - \
-        (system.state('04')[0] - system.state('01')[0])
-    return delta_gate 
-
 def single_qubit_corrections(
     sup_op: np.ndarray,
     hs_basis: Callable[[int, int], np.ndarray]
