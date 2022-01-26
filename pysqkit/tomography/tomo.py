@@ -37,8 +37,12 @@ class TomoEnv:
                 self._dims_qobj = [q_dims, [1]*system.size]
             elif isinstance(system, Qubit):
                 collapse_ops = system.collapse_ops(as_qobj=True)
-                dephasing_op = [system.dephasing_op(as_qobj=True)]
-                self._jump_op = collapse_ops + dephasing_op
+                dephasing_op = system.dephasing_op(as_qobj=True)
+                if dephasing_op is None:
+                    self._jump_op = collapse_ops
+                else:
+                    self._jump_op = collapse_ops + [dephasing_op]
+
                 q_dims = [system.dim_hilbert]
                 self._dims_qobj = [q_dims, [1]]
             

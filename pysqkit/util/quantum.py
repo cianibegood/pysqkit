@@ -45,9 +45,11 @@ def generalized_rabi_frequency(
     elif isinstance(system, Qubit):
         drive_op = eps*system.charge_op()
 
-    big_omega_transition = np.abs(get_mat_elem(drive_op, in_state, out_state))
+     
     energy_transition = np.abs(in_energy - out_energy)
     drive_detuning = energy_transition - drive_frequency
+
+    big_omega_transition = np.abs(get_mat_elem(drive_op, in_state, out_state))
 
     return np.sqrt(big_omega_transition**2 + drive_detuning**2)
 
