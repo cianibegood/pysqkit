@@ -248,7 +248,7 @@ class SimpleTransmon(Qubit):
         max_freq: float,
         anharm: float,
         ext_flux: Optional[float] = 0,
-        diel_loss_tan: Optional[float] = 0.0,
+        diel_loss_tan: Optional[float] = None,
         env_thermal_energy: Optional[float] = 0.0,
         dephasing_times: Optional[dict] = None,
         *,
@@ -499,6 +499,10 @@ class SimpleTransmon(Qubit):
         level_k: int,
         level_m: int,
     ) -> Tuple[float, float]:
+
+        if self.diel_loss_tan is None:
+            return None 
+
         if not isinstance(self.diel_loss_tan, float):
             raise ValueError(
                 "Dielectric loss tangent expected as a"

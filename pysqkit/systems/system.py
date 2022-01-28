@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
-from itertools import chain
+from itertools import chain, product 
 from copy import copy
 from functools import reduce
 from inspect import signature
@@ -69,6 +69,14 @@ class Qubit(ABC):
     @abstractmethod
     def _qubit_attrs(self) -> dict:
         pass
+
+    @abstractmethod
+    def collapse_ops(self):
+        pass 
+
+    @abstractmethod
+    def dephasing_op(self):
+        pass 
 
     def _get_eig_vals(
         self,
@@ -347,6 +355,7 @@ class Qubit(ABC):
             isherm=isherm,
         )
         return qobj
+
 
 
 class Coupling:
@@ -879,6 +888,7 @@ class QubitSystem:
 
         ind = np.argmin(np.abs(bare_energies - bare_energy))
         return ind
+    
 
     def state(
         self,
@@ -910,6 +920,64 @@ class QubitSystem:
             )
             return state_arr
         return energy, state
+    
+    def all_state_labels(self) -> List:
+
+        """
+        Description
+        ------------------------------------------------------------------
+        Returns the state labels as a list of strings. Example
+        ['00', '01', '02', ...]
+        """
+
+        dims_list = [qubit.dim_hilbert for qubit in self._qubits]
+        lev_tmp = []
+        for dim in dims_list:
+            lev_tmp.append([x for x in range(dim)])
+        states_tmp = [element for element in product(*lev_tmp)]
+        states = ["".join(map(str, states_tmp[x])) \
+            for x in range(len(states_tmp))]
+        return states
+    
+    def states_as_dict(
+        self, 
+        as_qobj: Optional[bool] = False
+        ) -> dict:
+
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the eigenenergies and eigenstates as a dictionary where 
+        the keys are the levels indices.
+        """
+
+        states = self.all_state_labels()
+        energy_dict = {}
+        eig_vals, eig_vecs = self.eig_states()
+        for state_label in states:
+            ind = self.state_index(state_label)
+            energy, state = eig_vals[ind], eig_vecs[ind]
+            if as_qobj:
+                q_dims = [qubit.dim_hilbert for qubit in self._qubits]
+
+                qobj_state = Qobj(
+                    inpt=state,
+                    dims=[q_dims, [1] * self.size],
+                    shape=[np.prod(q_dims), 1],
+                    type="ket",
+                )
+                energy_dict[state_label] = (energy, qobj_state)
+            else:
+                energy_dict[state_label] = (energy, state)
+        
+        return energy_dict 
+
+            
+
+
+
+        
+       
 
     def mat_elements(
         self,

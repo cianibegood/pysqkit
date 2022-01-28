@@ -1,11 +1,11 @@
-from typing import Callable, List, Union
+from typing import Callable, List, Union, Dict, Tuple
 
 import qutip as qtp 
 import numpy as np
 import time
 
 from pysqkit.solvers.solvkit import integrate
-from pysqkit.systems.system import QubitSystem, Qubit
+from pysqkit.systems.system import QubitSystem, Qubit, Drive
 from pysqkit.util.linalg import hilbert_schmidt_prod
 from pysqkit.util.hsbasis import iso_basis
 
@@ -18,7 +18,7 @@ class TomoEnv:
         system: Union[Qubit, QubitSystem],
         time: np.ndarray,
         options: qtp.solver.Options=None,
-        h0_frame: qtp.qobj.Qobj=None
+        with_noise: bool=False
         ):
             """
             Class to perform tomography
@@ -26,28 +26,54 @@ class TomoEnv:
         
             self._system = system
             self._time = time
-            
+            self._options = options
+
             if isinstance(system, QubitSystem):
-                collapse_ops = [op for qubit in \
-                    system for op in qubit.collapse_ops(as_qobj=True)]
-                dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
-                    for qubit in system]
-                self._jump_op = collapse_ops + dephasing_ops
                 q_dims = [qubit.dim_hilbert for qubit in system.qubits]
                 self._dims_qobj = [q_dims, [1]*system.size]
-            elif isinstance(system, Qubit):
-                collapse_ops = system.collapse_ops(as_qobj=True)
-                dephasing_op = system.dephasing_op(as_qobj=True)
-                if dephasing_op is None:
-                    self._jump_op = collapse_ops
-                else:
-                    self._jump_op = collapse_ops + [dephasing_op]
+                for qubit in self._system:
+                        if qubit.is_driven:
+                            for label, drive in qubit.drives.items():
+                                drive.set_params(time=time/(2*np.pi))  
 
+            elif isinstance(system, Qubit):
                 q_dims = [system.dim_hilbert]
                 self._dims_qobj = [q_dims, [1]]
-            
-            self._options = options
-            self.h0_frame = h0_frame
+                if qubit.is_driven:
+                    for label, drive in qubit.drives.items():
+                        drive.set_params(time=time/(2*np.pi))
+
+            if with_noise:            
+                if isinstance(system, QubitSystem):
+                    collapse_ops = [op for qubit in \
+                        system for op in qubit.collapse_ops(as_qobj=True)]
+                    dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
+                        for qubit in system]
+                    self._jump_op = collapse_ops + dephasing_ops
+                elif isinstance(system, Qubit):
+                    collapse_ops = system.collapse_ops(as_qobj=True)
+                    dephasing_op = system.dephasing_op(as_qobj=True)
+                    if dephasing_op is None:
+                        self._jump_op = collapse_ops
+                    else:
+                        self._jump_op = collapse_ops + [dephasing_op]
+            else:
+                self._jump_op = []
+
+            self.hamil0 = self._system.hamiltonian(as_qobj=True)
+            self.hamil_drive = []
+            self.pulse_drive = []
+            if isinstance(self._system, QubitSystem):
+                for qubit in self._system:
+                    if qubit.is_driven:
+                        for label, drive in qubit.drives.items():
+                            self.hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                            self.pulse_drive.append(drive.eval_pulse())
+            elif isinstance(self._system, Qubit):
+                if self._system.is_driven:
+                    for label, drive in self._system.drives.items():
+                        self.hamil_drive.append(drive.hamiltonian(as_qobj=True))
+                        self.pulse_drive.append(drive.eval_pulse())
         
     @property
     def system(self):
@@ -55,30 +81,13 @@ class TomoEnv:
     
     @property
     def time(self):
-        return self._time 
+        return self._time
+ 
 
     def simulate(self, state_in):
-        if self.h0_frame is None:
-            hamil0 = self._system.hamiltonian(as_qobj=True)
-        else:
-            hamil0 = self._system.hamiltonian(as_qobj=True) - self.h0_frame
-        hamil_drive = []
-        pulse_drive = []
-
-        if isinstance(self._system, QubitSystem):
-            for qubit in self._system:
-                if qubit.is_driven:
-                    for label, drive in qubit.drives.items():
-                        hamil_drive.append(drive.hamiltonian(as_qobj=True))
-                        pulse_drive.append(drive.eval_pulse())
-        elif isinstance(self._system, Qubit):
-            if self._system.is_driven:
-                for label, drive in self._system.drives.items():
-                        hamil_drive.append(drive.hamiltonian(as_qobj=True))
-                        pulse_drive.append(drive.eval_pulse())
               
-        result = integrate(self._time, state_in, hamil0, hamil_drive,
-                           pulse_drive, self._jump_op, 
+        result = integrate(self._time, state_in, self.hamil0, self.hamil_drive,
+                           self.pulse_drive, self._jump_op, 
                            "mesolve", options=self._options)
                     
         res = result.states[-1]
@@ -92,9 +101,11 @@ class TomoEnv:
     ) -> np.ndarray:
         
         """
+        Description
+        ----------------------------------------------------------------------
         Returns the action of the quantum operation associated
         with the time-evolution on the i-th element of a Hilbert-Schmidt
-        basis define via the function hs_basis with computational 
+        basis defined via the function hs_basis with computational 
         basis states in input_states.
         """
 
@@ -105,9 +116,6 @@ class TomoEnv:
         evolved_basis_i = 0
 
         for n in range(0, d):
-            # iso_eigvec = 0
-            # for m in range(0, d):
-            #     iso_eigvec += eigvecs[m, n]*input_states[m]
             iso_eigvec = np.einsum('i,ij->j', eigvecs[:, n], input_states)
             iso_eigvec_qobj = qtp.Qobj(inpt=iso_eigvec, dims=self._dims_qobj)
             rho_iso_eigvec_qobj = iso_eigvec_qobj*iso_eigvec_qobj.dag()
@@ -123,6 +131,8 @@ class TomoEnv:
     ) -> np.ndarray:
     
         """
+        Description
+        ----------------------------------------------------------------------
         Returns the superoperator associated with the time-evolution 
         for states in input_states. The output_states are assumed to be 
         the same as the input states. The superoperator is written in the 
