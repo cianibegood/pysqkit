@@ -107,6 +107,18 @@ def y_i_flx(system: QubitSystem, flx_label: str) -> float:
     yz1 = get_mat_elem(op, system.state('01')[1], system.state('11')[1] )
     return (np.abs(yz0 + yz1))/2
 
+def y_z_12_flx(system: QubitSystem, flx_label: str) -> float:
+    op = system[flx_label].charge_op()
+    yz0 = get_mat_elem(op, system.state('10')[1], system.state('20')[1] )
+    yz1 = get_mat_elem(op, system.state('11')[1], system.state('21')[1] )
+    return (np.abs(yz0 - yz1))/2
+
+def y_i_12_flx(system: QubitSystem, flx_label: str) -> float:
+    op = system[flx_label].charge_op()
+    yz0 = get_mat_elem(op, system.state('10')[1], system.state('20')[1] )
+    yz1 = get_mat_elem(op, system.state('11')[1], system.state('21')[1] )
+    return (np.abs(yz0 + yz1))/2
+
 def delta(system: QubitSystem) -> float:
     delta_gate = (system.state('13')[0] - system.state('10')[0]) - \
         (system.state('03')[0] - system.state('00')[0])
