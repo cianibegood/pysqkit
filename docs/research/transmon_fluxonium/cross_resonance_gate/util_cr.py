@@ -95,6 +95,34 @@ def zz(system: QubitSystem) -> float:
         - system.state('01')[0] - system.state('10')[0]
     return xi_zz
 
+def project_onto_comp_subspace(
+    system: QubitSystem, 
+    op: np.ndarray
+) -> np.ndarray:
+    projected_op = np.zeros([4, 4], dtype=complex)
+    comp_states = ['00', '01', '10', '11']
+    states = {}
+    for label in comp_states:
+        states[label] = system.state(label)[1]
+    for row in range(4):
+        label_a = comp_states[row]
+        for col in range(4):
+            label_b = comp_states[col]
+            projected_op[row, col] = get_mat_elem(op, states[label_a], 
+                                                  states[label_b])
+    return projected_op
+
+def y_z_flx_v2(system: QubitSystem, flx_label: str) -> float:
+    op = system[flx_label].charge_op()
+    projected_op = project_onto_comp_subspace(system, op)
+    print(projected_op)
+    print('----------------------------------')
+    y = np.array([[0.0, -1.0j], [1.0, 0.0]])
+    z = np.array([[1.0, 0.0], [0.0, -1.0]])
+    yz = np.kron(y, z)
+    return np.abs(np.trace(yz.dot(projected_op))/4)
+
+
 def y_z_flx(system: QubitSystem, flx_label: str) -> float:
     op = system[flx_label].charge_op()
     yz0 = get_mat_elem(op, system.state('00')[1], system.state('10')[1] )
