@@ -117,7 +117,7 @@ def y_z_flx_v2(system: QubitSystem, flx_label: str) -> float:
     projected_op = project_onto_comp_subspace(system, op)
     print(projected_op)
     print('----------------------------------')
-    y = np.array([[0.0, -1.0j], [1.0, 0.0]])
+    y = np.array([[0.0, -1.0j], [1.0j, 0.0]])
     z = np.array([[1.0, 0.0], [0.0, -1.0]])
     yz = np.kron(y, z)
     return np.abs(np.trace(yz.dot(projected_op))/4)
