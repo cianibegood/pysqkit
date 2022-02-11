@@ -115,8 +115,6 @@ def project_onto_comp_subspace(
 def y_z_flx_v2(system: QubitSystem, flx_label: str) -> float:
     op = system[flx_label].charge_op()
     projected_op = project_onto_comp_subspace(system, op)
-    print(projected_op)
-    print('----------------------------------')
     y = np.array([[0.0, -1.0j], [1.0j, 0.0]])
     z = np.array([[1.0, 0.0], [0.0, -1.0]])
     yz = np.kron(y, z)
@@ -126,7 +124,9 @@ def y_z_flx_v2(system: QubitSystem, flx_label: str) -> float:
 def y_z_flx(system: QubitSystem, flx_label: str) -> float:
     op = system[flx_label].charge_op()
     yz0 = get_mat_elem(op, system.state('00')[1], system.state('10')[1] )
+    print("yz0 = {}".format(yz0))
     yz1 = get_mat_elem(op, system.state('01')[1], system.state('11')[1] )
+    print("yz1 = {}".format(yz1))
     return (np.abs(yz0 - yz1))/2
 
 def y_i_flx(system: QubitSystem, flx_label: str) -> float:
