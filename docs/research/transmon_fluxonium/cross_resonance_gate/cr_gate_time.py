@@ -233,7 +233,7 @@ def main():
     save = True
     if save:
         with open("tmp/fid_leak_gate_time_p_set_" + p_set + ".txt", "w") as fp:
-            json.dump(result_test, fp)
+            json.dump(result, fp)
         paramfile = open('tmp/cr_gate_time_params_p_set_' + str(p_set) + '.txt', "w+")
         paramfile.write('The data where generated using ')
         paramfile.write('the following drive parameters. \n ')
