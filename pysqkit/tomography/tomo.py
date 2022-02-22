@@ -150,14 +150,22 @@ class TomoEnv:
         basis = [iso_basis(i, input_states, hs_basis) for i in range(0, d**2)]
         index_list = np.arange(0, d**2)
 
-        pool = multiprocessing.Pool(processes=n_process)
-        func = partial(self.evolve_hs_basis, input_states=input_states,
-                       hs_basis=hs_basis)
+        if n_process > 1:
 
-        evolved_basis = pool.map(func, index_list, chunksize=int(d**2//n_process))
+            pool = multiprocessing.Pool(processes=n_process)
+            func = partial(self.evolve_hs_basis, input_states=input_states,
+                        hs_basis=hs_basis)
 
-        pool.close()
-        pool.join()
+            evolved_basis = pool.map(func, index_list, chunksize=int(d**2//n_process))
+
+            pool.close()
+            pool.join()
+        else:
+            evolved_basis = []
+            for index in index_list:
+                ev_tmp = self.evolve_hs_basis(index, input_states=input_states, 
+                                              hs_basis=hs_basis)
+                evolved_basis.append(ev_tmp)
         
         for i in range(0, d**2):
             for k in range(0, d**2):
