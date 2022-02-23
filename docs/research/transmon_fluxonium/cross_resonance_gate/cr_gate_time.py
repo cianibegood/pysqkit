@@ -2,7 +2,6 @@ import numpy as np
 import scipy.integrate
 import time
 import qutip as qtp
-import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import pysqkit
 from pysqkit import QubitSystem
@@ -13,10 +12,7 @@ from pysqkit.util.phys import temperature_to_thermalenergy
 from pysqkit.util.quantum import generalized_rabi_frequency
 import pysqkit.util.transformations as trf
 from pysqkit.util.linalg import get_mat_elem
-from pysqkit.solvers.solvkit import integrate
 from pysqkit.util.hsbasis import weyl_by_index
-from pysqkit.solvers import solvkit
-import qutip
 import cmath
 import multiprocessing
 from functools import partial
@@ -25,7 +21,6 @@ from typing import List, Dict, Callable
 import matplotlib
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
 import util_cr as util
-import copy
 
 def mu_yz_flx(comp_states, op) -> float:
     yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'])
@@ -207,14 +202,14 @@ def main():
     for key in comp_states.keys():
         comp_states_list.append(comp_states[key])
     
-    n_points = 2
+    n_points = 100
     gate_time_list = np.linspace(t_tot - 5, t_tot + 5, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
                    comp_states_list=comp_states_list)
 
-    n_process = 2
+    n_process = 50
      # I see improvements till 8
 
     start = time.time()
