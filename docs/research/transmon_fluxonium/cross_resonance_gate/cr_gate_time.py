@@ -82,37 +82,58 @@ def get_fidelity_leakage(
                                           time=2*np.pi*tlist, 
                                           options=simu_opt, 
                                           with_noise=False)
+    env_syst_noise = pysqkit.tomography.TomoEnv(system=system, 
+                                          time=2*np.pi*tlist, 
+                                          options=simu_opt, 
+                                          with_noise=True)
     
-    n_process = 1
+    #n_process = 1
 
     sup_op = env_syst.to_super(comp_states_list, weyl_by_index)
+    sup_op_noise = env_syst_noise.to_super(comp_states_list, weyl_by_index)
     
     sq_corr = util.single_qubit_corrections(sup_op, weyl_by_index)
     sq_corr_sup = trf.kraus_to_super(sq_corr, weyl_by_index)
     total_sup_op = sq_corr_sup.dot(sup_op)
+
+    sq_corr_noise = util.single_qubit_corrections(sup_op_noise, weyl_by_index)
+    sq_corr_sup_noise = trf.kraus_to_super(sq_corr_noise, weyl_by_index)
+    total_sup_op_noise = sq_corr_sup_noise.dot(sup_op_noise)
     
     cr_super_target = trf.kraus_to_super(cry(-np.pi/2), weyl_by_index)
     
     theta_list = list(np.linspace(0, 2*np.pi, 500))
     
     fid_list_ry = []
+    fid_list_ry_noise = []
     for theta in theta_list:
         rot_y_super = trf.kraus_to_super(ry(theta), weyl_by_index)
         avg_tmp = average_process_fidelity(cr_super_target, 
                                            rot_y_super.dot(total_sup_op))
+        avg_tmp_noise = average_process_fidelity(cr_super_target, 
+                                                 rot_y_super.dot(total_sup_op_noise))
         fid_list_ry.append(avg_tmp)
+        fid_list_ry_noise.append(avg_tmp_noise)
     
     fid_ry = np.array(fid_list_ry)
+    fid_ry_noise = np.array(fid_list_ry_noise)
     
-    max_fid = np.max(fid_ry)
     max_index = np.argmax(fid_ry)
+    max_index_noise = np.argmax(fid_ry_noise)
     sup_rot_y_opt = trf.kraus_to_super(ry(theta_list[max_index]), weyl_by_index)
+    sup_rot_y_opt_noise = trf.kraus_to_super(ry(theta_list[max_index_noise]), weyl_by_index)
     avg_leakage = env_syst.leakage(comp_states_list)
+    avg_leakage_noise = env_syst_noise.leakage(comp_states_list)
     
     f_gate = average_gate_fidelity(cr_super_target, 
                                    sup_rot_y_opt.dot(total_sup_op), avg_leakage)
+    f_gate_noise = average_gate_fidelity(cr_super_target, 
+                                        sup_rot_y_opt_noise.dot(total_sup_op_noise), 
+                                        avg_leakage_noise)
     
-    result = {"gate_time": gate_time, "gate_fid": f_gate, "avg_leakage": avg_leakage}
+    result = {"gate_time": gate_time, "gate_fid": f_gate, 
+             "avg_leakage": avg_leakage, "gate_fid_noise": f_gate_noise,
+             "avg_leakage_noise": avg_leakage_noise}
     
     return result    
 
@@ -125,7 +146,7 @@ def main():
     thermal_energy = temperature_to_thermalenergy(temperature) # kb T/h in GHz
     d_comp = 4
 
-    p_set = "1"
+    p_set = "2"
 
 
     #Transmon
@@ -166,11 +187,6 @@ def main():
 
     jc = parameters_set[p_set]["jc"]
     coupled_sys = transm.couple_to(flx, coupling=pysqkit.couplers.capacitive_coupling, strength=jc)
-    bare_system = transm.couple_to(flx, coupling=pysqkit.couplers.capacitive_coupling, strength=0.0)
-
-    states_label = coupled_sys.all_state_labels()
-    states_dict = coupled_sys.states_as_dict(as_qobj=True)
-    flx_freq = flx.eig_energies(2)[1] - flx.eig_energies(2)[0]
 
     state_label = ["00", "01", "10", "11"]
     comp_states = {}
@@ -181,7 +197,7 @@ def main():
         state_tmp = np.exp(-1j*phase)*state_tmp
         comp_states[label] = state_tmp
 
-    eps_drive = 0.5 #GHz
+    eps_drive = 0.62 #GHz
     q_op = coupled_sys["F"].charge_op()
     op = coupled_sys["F"].charge_op()*eps_drive
     freq_drive = transm.max_freq
@@ -202,14 +218,14 @@ def main():
     for key in comp_states.keys():
         comp_states_list.append(comp_states[key])
     
-    n_points = 100
-    gate_time_list = np.linspace(t_tot - 5, t_tot + 5, n_points)
+    n_points = 200
+    gate_time_list = np.linspace(130,  150, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
                    comp_states_list=comp_states_list)
 
-    n_process = 50
+    n_process = 200
      # I see improvements till 8
 
     start = time.time()
