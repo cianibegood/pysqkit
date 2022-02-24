@@ -218,14 +218,14 @@ def main():
     for key in comp_states.keys():
         comp_states_list.append(comp_states[key])
     
-    n_points = 200
+    n_points = 2
     gate_time_list = np.linspace(130,  150, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
                    comp_states_list=comp_states_list)
 
-    n_process = 200
+    n_process = 2
      # I see improvements till 8
 
     start = time.time()
@@ -241,7 +241,7 @@ def main():
 
     print("Computation time = {} s".format(end - start))
 
-    save = True
+    save = False
     if save:
         with open("tmp/fid_leak_gate_time_p_set_" + p_set + ".txt", "w") as fp:
             json.dump(result, fp)
