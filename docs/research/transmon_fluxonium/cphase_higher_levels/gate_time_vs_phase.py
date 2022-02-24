@@ -98,7 +98,8 @@ def get_result(
     x0 = np.array([0.017, 7.15]) #initial guess
     qubit_labels = system.labels
     eps_ratios = {qubit_labels[0]: 0.0, qubit_labels[1]:1.0}
-    args_to_pass = (['00', '03'], ['10', '13'], system, cond_phase, eps_ratios) 
+    args_to_pass = (['00', '03'], ['10', '13'], system, 
+                    cond_phase, eps_ratios) 
 
     minimization_result = minimize(func_to_minimize, x0, args=args_to_pass)
 
@@ -113,7 +114,8 @@ def get_result(
     eps = {}
     for qubit in qubit_labels:
         eps[qubit] = eps_drive*eps_ratios[qubit]
-    rabi_period = 1/generalized_rabi_frequency(["00", "03"], eps, freq_drive, system)
+    rabi_period = 1/generalized_rabi_frequency(["00", "03"], 
+                                               eps, freq_drive, system)
 
     t_rise = 5.0 # [ns]
 
@@ -121,13 +123,16 @@ def get_result(
 
     args_to_pass = (t_rise, rabi_period) 
 
-    minimization_result_time = minimize(func_to_minimize_time, t_gate_0, args=args_to_pass)
+    minimization_result_time = minimize(func_to_minimize_time, 
+                                        t_gate_0, args=args_to_pass)
 
     t_gate = minimization_result_time['x'][0]
 
     res["t_gate"] = t_gate
 
     return res
+
+
 
 def main():
     with open('flx_transm_params.txt') as param_file:
@@ -180,16 +185,13 @@ def main():
     coupled_sys = transm.couple_to(flx, 
                                    coupling=pysqkit.couplers.capacitive_coupling, 
                                    strength=jc)
-    bare_system = transm.couple_to(flx, 
-                                   coupling=pysqkit.couplers.capacitive_coupling, 
-                                   strength=0.0)
     
     phase_in = np.pi
     phase_fin = 3*np.pi
-    n_points = 50
+    n_points = 4
     cond_phase_list = list(np.linspace(phase_in, phase_fin, n_points))
 
-    n_process = 8
+    n_process = 4
 
     func = partial(get_result, system=coupled_sys)
 
@@ -207,7 +209,7 @@ def main():
 
     print("Computation time: {} s".format(end - start))
 
-    save = True
+    save = False
     if save:
         with open('tmp/gate_time_phase_result.txt', 'w') as my_file:
             json.dump(result, my_file)
