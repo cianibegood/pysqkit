@@ -138,14 +138,13 @@ def get_fidelity_leakage(
 
 
 def main():
-    with open('flx_transm_params.txt') as param_file:
+    with open('../flx_transm_params.txt') as param_file:
         parameters_set = json.load(param_file)
 
         temperature = 0.020 # K
     thermal_energy = temperature_to_thermalenergy(temperature) # kb T/h in GHz
-    d_comp = 4
 
-    p_set = "2"
+    p_set = "3"
 
 
     #Transmon
@@ -170,7 +169,7 @@ def main():
         joseph_energy=parameters_set[p_set]["joseph_energy_f"], #8.0, 
         diel_loss_tan=parameters_set[p_set]["diel_loss_tan_f"], #set to zero to check d_1 L1 = d_2 L2
         env_thermal_energy=thermal_energy,
-        dephasing_times= None #parameters_set[p_set]["dephasing_times_f"] #ns/2*np.pi 
+        dephasing_times=None #parameters_set[p_set]["dephasing_times_f"] #ns/2*np.pi 
     )
     flx.diagonalize_basis(levels_f)
 
@@ -182,7 +181,6 @@ def main():
         pulse_shape=pysqkit.drives.pulse_shapes.gaussian_top
     )
 
-    d_leak = levels_t*levels_f - d_comp
 
     jc = parameters_set[p_set]["jc"]
     coupled_sys = transm.couple_to(flx, coupling=pysqkit.couplers.capacitive_coupling, strength=jc)
@@ -198,11 +196,7 @@ def main():
 
     eps_drive = 0.62 #GHz
     q_op = coupled_sys["F"].charge_op()
-    op = coupled_sys["F"].charge_op()*eps_drive
     freq_drive = transm.max_freq
-    omega_drive = np.abs(get_mat_elem(op, coupled_sys.state("01")[1], coupled_sys.state("11")[1]))
-    delta_drive = freq_drive - transm.max_freq
-    rabi_period = 1/np.sqrt(omega_drive**2 + delta_drive**2)
     t_rise = 10.0 # [ns]
 
     t_tot_0 = [100.0]
@@ -217,15 +211,14 @@ def main():
     for key in comp_states.keys():
         comp_states_list.append(comp_states[key])
     
-    n_points = 2
+    n_points = 200
     gate_time_list = np.linspace(130,  150, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
                    comp_states_list=comp_states_list)
 
-    n_process = 2
-     # I see improvements till 8
+    n_process = 200
 
     start = time.time()
         
@@ -240,7 +233,7 @@ def main():
 
     print("Computation time = {} s".format(end - start))
 
-    save = False
+    save = True
     if save:
         with open("tmp/fid_leak_gate_time_p_set_" + p_set + ".txt", "w") as fp:
             json.dump(result, fp)
