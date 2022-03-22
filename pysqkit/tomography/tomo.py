@@ -49,7 +49,10 @@ class TomoEnv:
                         system for op in qubit.collapse_ops(as_qobj=True)]
                     dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
                         for qubit in system]
-                    self._jump_op = collapse_ops + dephasing_ops
+                    if None in dephasing_ops:
+                        self._jump_op = collapse_ops
+                    else:
+                        self._jump_op = collapse_ops + dephasing_ops
                 elif isinstance(system, Qubit):
                     collapse_ops = system.collapse_ops(as_qobj=True)
                     dephasing_op = system.dephasing_op(as_qobj=True)

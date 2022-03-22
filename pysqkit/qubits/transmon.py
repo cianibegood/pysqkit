@@ -638,13 +638,17 @@ class SimpleTransmon(Qubit):
         Since this is not calculated within the class, the user has to 
         guarantee that it is consistent with the other units of measure. 
         """ 
+
         
         levels_id = str(level)
 
-        if levels_id in self.dephasing_times.keys():
-            return 1/self.dephasing_times[levels_id]
+        if self.dephasing_times is None:
+            return 0.0
         else:
-            return 0.0 
+            if levels_id in self.dephasing_times.keys():
+                return 1/self.dephasing_times[levels_id]
+            else:
+                return 0.0 
     
     def dephasing_rate(
         self,
@@ -690,25 +694,28 @@ class SimpleTransmon(Qubit):
         where |i> denotes an eigenstate.
         """
 
-        rate = {}
+        if self.dephasing_times is None:
+            return None
+        else:
+            rate = {}
 
-        
-        for level in range(1, self.dim_hilbert):
-            if self.dephasing_rate(level, dephasing_channels) != 0.0:
-                rate[str(level)] = \
-                    self.dephasing_rate(level, dephasing_channels)
-        
-        deph_op = 0.0
-
-        _, eig_vecs = self.eig_states(expand=False)
-
-        for level_id in rate.keys():
-            projector = np.outer(eig_vecs[int(level_id)], 
-                                eig_vecs[int(level_id)].conj())
             
-            deph_op += np.sqrt(2*rate[level_id])*projector
-        
-        return deph_op    
+            for level in range(1, self.dim_hilbert):
+                if self.dephasing_rate(level, dephasing_channels) != 0.0:
+                    rate[str(level)] = \
+                        self.dephasing_rate(level, dephasing_channels)
+            
+            deph_op = 0.0
+
+            _, eig_vecs = self.eig_states(expand=False)
+
+            for level_id in rate.keys():
+                projector = np.outer(eig_vecs[int(level_id)], 
+                                    eig_vecs[int(level_id)].conj())
+                
+                deph_op += np.sqrt(2*rate[level_id])*projector
+            
+            return deph_op    
     
     def dephasing_op(
         self,
@@ -730,13 +737,16 @@ class SimpleTransmon(Qubit):
         
         op = self._get_dephasing_op(dephasing_channels)
 
-        if expand:
-            op = self.basis.expand_op(op)
-        
-        if as_qobj:
-            qobj_op = self._qobj_oper(op, isherm=True)
-            return qobj_op
-        return op
+        if op is None:
+            return None
+        else:
+            if expand:
+                op = self.basis.expand_op(op)
+            
+            if as_qobj:
+                qobj_op = self._qobj_oper(op, isherm=True)
+                return qobj_op
+            return op
 
     @staticmethod
     def from_energies(
