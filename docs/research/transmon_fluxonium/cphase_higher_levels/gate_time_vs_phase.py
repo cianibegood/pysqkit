@@ -193,6 +193,9 @@ def main():
 
     n_process = 4
 
+    print(n_process)
+    print(n_points)
+
     func = partial(get_result, system=coupled_sys)
 
     start = time.time()

@@ -9,7 +9,6 @@ from pysqkit.drives.pulse_shapes import gaussian_top
 from pysqkit.util.metrics import average_process_fidelity, \
     average_gate_fidelity
 from pysqkit.util.phys import temperature_to_thermalenergy
-from pysqkit.util.quantum import generalized_rabi_frequency
 import pysqkit.util.transformations as trf
 from pysqkit.util.linalg import get_mat_elem
 from pysqkit.util.hsbasis import weyl_by_index
@@ -158,7 +157,7 @@ def main():
         diel_loss_tan=parameters_set[p_set]["diel_loss_tan_t"], #set to zero to check d_1 L1 = d_2 L2
         env_thermal_energy=thermal_energy,    
         dim_hilbert=levels_t,
-        dephasing_times=parameters_set[p_set]["dephasing_times_t"]
+        dephasing_times=None #parameters_set[p_set]["dephasing_times_t"]
     )
 
     #Fluxonium
@@ -171,7 +170,7 @@ def main():
         joseph_energy=parameters_set[p_set]["joseph_energy_f"], #8.0, 
         diel_loss_tan=parameters_set[p_set]["diel_loss_tan_f"], #set to zero to check d_1 L1 = d_2 L2
         env_thermal_energy=thermal_energy,
-        dephasing_times= parameters_set[p_set]["dephasing_times_f"] #ns/2*np.pi 
+        dephasing_times= None #parameters_set[p_set]["dephasing_times_f"] #ns/2*np.pi 
     )
     flx.diagonalize_basis(levels_f)
 
