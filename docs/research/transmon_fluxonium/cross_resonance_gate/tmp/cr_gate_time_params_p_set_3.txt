@@ -1,0 +1,6 @@
+The data where generated using the following drive parameters. 
+ t_rise = 10.000000 ns
+freq_drive = 5.500000 GHz
+eps_drive = 0.620000 GHz
+parameter_set:
+{'max_freq_t': 5.5, 'anharm_t': -0.3, 'diel_loss_tan_t': 7.5e-07, 'dephasing_times_t': {'1': 314159.26535897935, '2': 188495.55921538756}, 'charge_energy_f': 1.0, 'induct_energy_f': 1.0, 'joseph_energy_f': 4.0, 'diel_loss_tan_f': 7.099999999999999e-06, 'dephasing_times_f': {'1': 1256637.0614359174, '2': 125663.70614359173, '3': 125663.70614359173, '4': 31415.926535897932}, 'jc': 0.02}
