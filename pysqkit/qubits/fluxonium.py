@@ -44,6 +44,7 @@ class Fluxonium(Qubit):
         joseph_energy: float,
         ext_flux: Optional[float] = 0.5,
         diel_loss_tan: Optional[float] = 0.0,
+        freq_loss_tan: Optional[float] = 6.0,
         env_thermal_energy: Optional[float] = 0.0, #kb T
         dephasing_times: Optional[dict] = None,
         *,
@@ -66,8 +67,13 @@ class Fluxonium(Qubit):
             External flux in units of \Phi_0. 
         diel_loss_tan: Optional[float] = 0.0
             Dielectric loss tangent that governs relaxation via dielectric
-            loss. See for instance 
+            loss. The value is usually given at 6.0 GHz. The loss tangent 
+            follows a law with frequency ~ omega^{epsilon} with epsilon taken 
+            to be 0.15. 
+            See for instance 
             L. B. Nguyen et al., Phys. Rev. X 9, 041041 (2019).
+        freq_loss_tan: Optional[float] = 6.0
+            Frequency at which the dielectric loss tangent is given.
         env_thermal_energy: Optional[float] = 0.0
             Thermal energy of the environment k_b T.
         dephasing_times: Optional[dict] = None
@@ -94,6 +100,7 @@ class Fluxonium(Qubit):
         self._ext_flux = ext_flux
 
         self.diel_loss_tan = diel_loss_tan
+        self.freq_loss_tan = freq_loss_tan
         self.env_thermal_energy = env_thermal_energy
         self.dephasing_times = dephasing_times
 
@@ -404,12 +411,15 @@ class Fluxonium(Qubit):
             level_k, level_m = level_m, level_k
 
         eig_en, eig_vec = self.eig_states([level_k, level_m], expand=False)
-        energy_diff = (eig_en[1] - eig_en[0]) / self._ec
+        energy_diff = (eig_en[1] - eig_en[0])/self._ec
+
+        diel_loss_tan_eff = \
+            self.diel_loss_tan*(energy_diff/(self.freq_loss_tan/self._ec))**0.15
 
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
-        gamma = self.diel_loss_tan*self._ec * energy_diff ** 2 * phi_km ** 2 / 4
+        gamma = diel_loss_tan_eff*self._ec * energy_diff ** 2 * phi_km ** 2 / 4
         nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
         relaxation_rate = gamma * (nth + 1)
