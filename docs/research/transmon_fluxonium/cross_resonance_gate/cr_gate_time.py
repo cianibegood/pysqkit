@@ -141,10 +141,10 @@ def main():
     with open('../flx_transm_params.txt') as param_file:
         parameters_set = json.load(param_file)
 
-        temperature = 0.020 # K
+    temperature = 0.020 # K
     thermal_energy = temperature_to_thermalenergy(temperature) # kb T/h in GHz
 
-    p_set = "3"
+    p_set = "2"
 
 
     #Transmon

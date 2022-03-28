@@ -123,6 +123,7 @@ class Fluxonium(Qubit):
             self.induct_energy,
             self.joseph_energy,
             self.ext_flux,
+            self.freq_loss_tan,
             self.diel_loss_tan,
             self.env_thermal_energy,
             self.dephasing_times,
