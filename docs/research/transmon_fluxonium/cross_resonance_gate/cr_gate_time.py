@@ -211,14 +211,14 @@ def main():
     for key in comp_states.keys():
         comp_states_list.append(comp_states[key])
     
-    n_points = 1
-    gate_time_list = np.linspace(150,  170, n_points)
+    n_points = 200
+    gate_time_list = np.linspace(130,  150, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
                    comp_states_list=comp_states_list)
 
-    n_process = 1
+    n_process = 200
 
     start = time.time()
         

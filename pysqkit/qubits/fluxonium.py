@@ -123,8 +123,8 @@ class Fluxonium(Qubit):
             self.induct_energy,
             self.joseph_energy,
             self.ext_flux,
-            self.freq_loss_tan,
             self.diel_loss_tan,
+            self.freq_loss_tan,
             self.env_thermal_energy,
             self.dephasing_times,
             basis=copy(self.basis),
@@ -416,6 +416,7 @@ class Fluxonium(Qubit):
 
         diel_loss_tan_eff = \
             self.diel_loss_tan*(np.abs(energy_diff)/(self.freq_loss_tan/self._ec))**0.15
+
 
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
