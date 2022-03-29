@@ -144,7 +144,7 @@ def main():
     temperature = 0.020 # K
     thermal_energy = temperature_to_thermalenergy(temperature) # kb T/h in GHz
 
-    p_set = "2"
+    p_set = "3"
 
 
     #Transmon
@@ -212,7 +212,7 @@ def main():
         comp_states_list.append(comp_states[key])
     
     n_points = 200
-    gate_time_list = np.linspace(130,  150, n_points)
+    gate_time_list = np.linspace(150,  170, n_points)
 
     func = partial(get_fidelity_leakage, system=coupled_sys, t_rise=t_rise, 
                    eps_drive=eps_drive, freq_drive=freq_drive, 
