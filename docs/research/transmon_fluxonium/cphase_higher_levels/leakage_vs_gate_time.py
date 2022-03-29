@@ -174,7 +174,7 @@ def get_fidelity(
     
 
 def main():
-    with open('flx_transm_params.txt') as param_file:
+    with open('../flx_transm_params.txt') as param_file:
         parameters_set = json.load(param_file)
     
     temperature = 0.020 # K
@@ -266,7 +266,7 @@ def main():
         rabi_period = 1/generalized_rabi_frequency(["00", "03"], 
                                                 eps, freq_drive, coupled_sys)
 
-        t_rise = 5.0 # [ns]
+        t_rise = 10.0 # [ns]
         
         res_dict["t_rise"] = t_rise
 
