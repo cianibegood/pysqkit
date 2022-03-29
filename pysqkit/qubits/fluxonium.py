@@ -415,16 +415,16 @@ class Fluxonium(Qubit):
         energy_diff = (eig_en[1] - eig_en[0])/self._ec
 
         diel_loss_tan_eff = \
-            self.diel_loss_tan*(energy_diff/(self.freq_loss_tan/self._ec))**0.15
+            self.diel_loss_tan*(np.abs(energy_diff)/(self.freq_loss_tan/self._ec))**0.15
 
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
-        gamma = diel_loss_tan_eff*self._ec * energy_diff ** 2 * phi_km ** 2 / 4
-        nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
+        gamma = diel_loss_tan_eff*self._ec*energy_diff**2*phi_km**2/4
+        nth = average_photon(energy_diff*self._ec, self.env_thermal_energy)
 
-        relaxation_rate = gamma * (nth + 1)
-        excitation_rate = gamma * nth
+        relaxation_rate = gamma*(nth + 1)
+        excitation_rate = gamma*nth
 
         return relaxation_rate, excitation_rate       
 
