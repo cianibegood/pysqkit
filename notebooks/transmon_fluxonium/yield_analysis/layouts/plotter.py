@@ -3,7 +3,7 @@ from typing import Optional
 from itertools import combinations
 
 import matplotlib.pyplot as plt
-from layout import Layout
+from .layout import Layout
 
 RE_FILTER = re.compile("([a-zA-Z]+)([0-9]+)")
 
