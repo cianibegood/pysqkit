@@ -11,39 +11,37 @@ def address_collision(
     return False
 
 
-def cross_res_collision(ctrl_freq, ctrl_aharm, target_freq, *, delta_cr=0.004):
-    if target_freq > ctrl_freq:
+def cross_res_collision(ctrl_freq, ctrl_aharm, tar_freq, *, delta_cr=0.004):
+    if tar_freq > ctrl_freq:
         return True
-    if target_freq < (ctrl_freq + ctrl_aharm):
+    if tar_freq < (ctrl_freq + ctrl_aharm):
         return True
 
-    if abs((2 * target_freq) - (2 * ctrl_freq) - ctrl_aharm) < delta_cr:
+    if abs((2 * tar_freq) - (2 * ctrl_freq + ctrl_aharm)) < delta_cr:
         return True
 
     return False
 
 
 def spectator_collision(
-    control_freq,
-    control_anharm,
-    target_freq,
-    spectator_freq,
-    spectator_anharm,
+    ctrl_freq,
+    ctrl_anharm,
+    tar_freq,
+    spec_freq,
+    spec_anharm,
     *,
     delta_i=0.017,
     delta_j=0.025,
     delta_k=0.017,
 ):
-    if abs(target_freq - spectator_freq) < delta_i:
+    if abs(tar_freq - spec_freq) < delta_i:
         return True
 
-    if abs(target_freq - spectator_freq - spectator_anharm) < delta_j:
+    if abs(tar_freq - spec_freq - spec_anharm) < delta_j:
         return True
 
-    if (
-        abs(target_freq + spectator_freq - (2 * control_freq) - control_anharm)
-        < delta_k
-    ):
-        return True
+    # ctrl_02_trans_freq = (2 * ctrl_freq) + ctrl_anharm
+    # if abs(tar_freq + spec_freq - ctrl_02_trans_freq) < delta_k:
+    # return True
     return False
 
