@@ -2,7 +2,8 @@ import re
 from typing import Optional
 from itertools import combinations
 
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
+from matplotlib import patches as mp
 from .layout import Layout
 
 RE_FILTER = re.compile("([a-zA-Z]+)([0-9]+)")
@@ -45,6 +46,8 @@ class MatplotlibPlotter:
 
     qubit_circ_params = dict(radius=0.35, lw=1, ec="black",)
 
+    qubit_hexagon_params = dict(radius=0.35, lw=1, ec="black")
+
     label_params = dict(ha="center", va="center", weight="bold",)
 
     line_params = dict(color="black", linestyle="--", lw=1,)
@@ -81,13 +84,23 @@ class MatplotlibPlotter:
         )
 
     def _draw_qubit_circ(self, x, y, color):
-        qubit_circ = plt.Circle(
+        qubit_circ = mp.Circle(
             (x, y),
             color=color,
             zorder=self.zorders["circle"],
             **self.qubit_circ_params,
         )
         self.ax.add_artist(qubit_circ)
+
+    def _draw_qubit_hexagon(self, x, y, color):
+        qubit_hexagon = mp.RegularPolygon(
+            (x, y),
+            6,
+            color=color,
+            zorder=self.zorders["circle"],
+            **self.qubit_circ_params,
+        )
+        self.ax.add_artist(qubit_hexagon)
 
     def _draw_patch(self, cords, color):
         patch = plt.Polygon(
@@ -108,6 +121,7 @@ class MatplotlibPlotter:
 
         def _dfs_draw(qubit):
             if qubit not in drawn_qubits:
+                qubit_type = self.layout.param("qubit_type", qubit)
                 role = self.layout.param("role", qubit)
                 if role == "data":
                     color = "#ffffff"
@@ -116,7 +130,12 @@ class MatplotlibPlotter:
                     color = "#2196f3" if stab_type == "x_type" else "#4caf50"
 
                 x, y = self.layout.param("coords", qubit)
-                self._draw_qubit_circ(x, y, color)
+                if qubit_type == "transmon":
+                    self._draw_qubit_circ(x, y, color)
+                elif qubit_type == "fluxonium":
+                    self._draw_qubit_hexagon(x, y, color)
+                else:
+                    raise ValueError(f"Unknown qubit type {qubit_type} for qubit {qubit}")
                 if label_qubits:
                     if param_label:
                         param_val = self.layout.param(param_label, qubit)

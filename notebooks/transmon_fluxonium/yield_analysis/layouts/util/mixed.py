@@ -1,10 +1,10 @@
 from typing import List
 import numpy as np
 
-from pysqkit.qubits import Fluxonium, fluxonium
+from pysqkit.qubits import Fluxonium
 
-from .layout import Layout
-from .transmon_fluxonium_collisions import (
+from ..layout import Layout
+from ..collisions.mixed import (
     address_collision,
     cross_res_collision,
     spectator_collision,
@@ -142,10 +142,8 @@ def sample_params(
         )
         fluxonium_qubit.diagonalize_basis(num_fluxonium_levels)
 
-        energies = fluxonium_qubit.eig_energies()
-        for state_i, state_j in [(1, 0), (2, 1), (3, 2), (4, 3)]:
-            trans_freq = energies[state_i] - energies[state_j]
-            layout.set_param(f"freq_{state_i}{state_j}", fluxonium, trans_freq)
+        level_freqs = fluxonium_qubit.eig_energies()
+        layout.set_param("freqs", fluxonium, level_freqs)
 
 
 def get_collisions(layout: Layout) -> List[int]:
@@ -155,21 +153,17 @@ def get_collisions(layout: Layout) -> List[int]:
 
     fluxonia = layout.get_qubits(qubit_type="fluxonium")
     for fluxonium in fluxonia:
-        freq_10 = layout.param("freq_10", fluxonium)
-        freq_21 = layout.param("freq_21", fluxonium)
-        freq_32 = layout.param("freq_32", fluxonium)
-        freq_43 = layout.param("freq_43", fluxonium)
-
+        freqs_fluxonium = layout.param("freqs", fluxonium)
         transmons = layout.get_neighbors(fluxonium)
 
         for transmon in transmons:
             transmon_freq = layout.param("freq", transmon)
             # transmon_anharm = layout.param("anharm", transmon)
 
-            if address_collision(transmon_freq, freq_10, freq_21, freq_32, freq_43):
+            if address_collision(transmon_freq, freqs_fluxonium):
                 num_address_collisions += 1
 
-            if cross_res_collision(transmon_freq, freq_10, freq_21, freq_32, freq_43):
+            if cross_res_collision(transmon_freq, freqs_fluxonium):
                 num_cross_res_collisions += 1
 
             for spectator in transmons:
@@ -178,9 +172,7 @@ def get_collisions(layout: Layout) -> List[int]:
                     spectator_anharm = layout.param("anharm", spectator)
 
                     if spectator_collision(
-                        transmon_freq,
-                        spectator_freq,
-                        spectator_anharm,
+                        transmon_freq, spectator_freq, spectator_anharm,
                     ):
                         num_spectator_collisions += 1
     result = np.array(
