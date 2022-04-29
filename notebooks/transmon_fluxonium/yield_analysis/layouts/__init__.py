@@ -5,10 +5,4 @@ from .plotter import plot
 from .util import mixed
 from .util import transmons
 
-__all__ = [
-    "Layout",
-    "surface_code",
-    "plot",
-    "transmons",
-    "mixed"
-]
+__all__ = ["Layout", "surface_code", "plot", "transmons", "mixed"]
