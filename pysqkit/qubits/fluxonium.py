@@ -297,7 +297,7 @@ class Fluxonium(Qubit):
         *,
         truncation_ind: int = None,
         get_data=False,
-    ) -> np.ndarray:
+    ) -> xr.Dataset:
         if isinstance(levels, int):
             levels = np.array([levels])
 
