@@ -1,8 +1,9 @@
 from typing import List
 import numpy as np
 
-from .layout import Layout
-from .transmon_collisions import (
+
+from ..layout import Layout
+from ..collisions.transmons import (
     address_collision,
     cross_res_collision,
     spectator_collision,

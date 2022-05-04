@@ -40,8 +40,7 @@ def spectator_collision(
     if abs(tar_freq - spec_freq - spec_anharm) < delta_j:
         return True
 
-    # ctrl_02_trans_freq = (2 * ctrl_freq) + ctrl_anharm
-    # if abs(tar_freq + spec_freq - ctrl_02_trans_freq) < delta_k:
-    # return True
+    ctrl_02_trans_freq = (2 * ctrl_freq) + ctrl_anharm
+    if abs(tar_freq + spec_freq - ctrl_02_trans_freq) < delta_k:
+        return True
     return False
-
