@@ -27,8 +27,6 @@ import copy
 import json
 import cmath
 
-from IPython.display import display, Latex
-
 def mu_yz_flx(comp_states, op) -> float:
     yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'])
     yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'])
@@ -98,7 +96,7 @@ def optimal_sup_op(
     
     return total_sup_op_ry
 
-    def get_fidelity_leakage(
+def get_fidelity_leakage(
     transm_freq: float
 ) -> dict:
     with open('../flx_transm_params.txt') as param_file:
@@ -123,7 +121,7 @@ def optimal_sup_op(
     )
 
     #Fluxonium
-    levels_f = 4
+    levels_f = 8
 
     flx = pysqkit.qubits.Fluxonium(
         label='F', 
@@ -178,8 +176,6 @@ def optimal_sup_op(
 
     minimization_result = minimize(func_to_minimize, eps_0, args=args_to_pass)
 
-    print(minimization_result)
-
     end = time.time()
 
     eps_drive = minimization_result['x'][0] #1/(util.y_z_flx(coupled_sys, 'F')*eps_drive*4)  # [ns]
@@ -231,8 +227,8 @@ def optimal_sup_op(
     return res
 
 def main():
-    n_points = 2
-    n_processes = 2
+    n_points = 200
+    n_processes = 200
     freq_list = np.linspace(4.2, 5.8, n_points)
 
     start = time.time()
@@ -250,7 +246,7 @@ def main():
 
     save = True
     if save:
-        with open("/tmp/cr_fidelity_leakage.txt", "w") as fp:
+        with open("tmp/cr_fidelity_leakage.txt", "w") as fp:
             json.dump(result, fp)
 
 if __name__ == "__main__":
