@@ -153,7 +153,16 @@ def get_collisions(layout: Layout) -> List[int]:
 
     fluxonia = layout.get_qubits(qubit_type="fluxonium")
     for fluxonium in fluxonia:
-        freqs_fluxonium = layout.param("freqs", fluxonium)
+        flux_freqs = layout.param("freqs", fluxonium)
+
+        #freq_flux_20 = flux_freqs[2] - flux_freqs[0]
+        freq_flux_21 = flux_freqs[2] - flux_freqs[1]
+        freq_flux_30 = flux_freqs[3] - flux_freqs[0]
+        freq_flux_40 = flux_freqs[4] - flux_freqs[0]
+        #freq_flux_31 = flux_freqs[3] - flux_freqs[1]
+        #freq_flux_41 = flux_freqs[4] - flux_freqs[1]
+        freq_flux_50  = flux_freqs[5] - flux_freqs[0]
+
         transmons = layout.get_neighbors(fluxonium)
 
         for transmon in transmons:
@@ -180,3 +189,66 @@ def get_collisions(layout: Layout) -> List[int]:
         dtype=int,
     )
     return result
+
+
+def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
+    if len(bounds) != 6:
+        raise ValueError("Expected only 6 bounds to be provided.")
+
+    fluxoniums = layout.get_qubits(qubit_type="fluxonium")
+    for fluxonium in fluxoniums:
+        freqs_fluxonium = layout.param("freqs", fluxonium)
+        transmons = layout.get_neighbors(fluxonium)
+
+        for transmon in transmons:
+            transmon_freq = layout.param("freq", transmon)
+            data_freq = layout.param("freq", data_qubit)
+            data_anharm = layout.param("anharm", data_qubit)
+
+            if abs(anc_freq - data_freq) < bounds[0]:
+                return True
+
+            if abs(anc_freq - data_freq - data_anharm) < bounds[1]:
+                return True
+
+            if abs(data_freq - anc_freq - anc_anharm) < bounds[1]:
+                return True
+
+            if layout.param("target_freq", anc_qubit) > layout.param(
+                "target_freq", data_qubit
+            ):
+                ctrl_qubit, tar_qubit = anc_qubit, data_qubit
+                ctrl_freq, tar_freq = anc_freq, data_freq
+                ctrl_anharm = anc_anharm
+
+            else:
+                ctrl_qubit, tar_qubit = data_qubit, anc_qubit
+                ctrl_freq, tar_freq = data_freq, anc_freq
+                ctrl_anharm = data_anharm
+
+            if ctrl_freq < tar_freq:
+                return True
+            if tar_freq < (ctrl_freq + ctrl_anharm):
+                return True
+
+            ctrl_02_freq = 2 * ctrl_freq + ctrl_anharm
+            if abs(2 * tar_freq - ctrl_02_freq) < bounds[2]:
+                return True
+
+            spectator_qubits = layout.get_neighbors(ctrl_qubit)
+            for spec_qubit in spectator_qubits:
+                if spec_qubit != tar_qubit:
+                    spec_freq = layout.param("freq", spec_qubit)
+                    spec_anharm = layout.param("anharm", spec_qubit)
+
+                    if abs(tar_freq - spec_freq) < bounds[3]:
+                        return True
+
+                    spec_12_freq = spec_freq + spec_anharm
+                    if abs(tar_freq - spec_12_freq) < bounds[4]:
+                        return True
+
+                    if abs(tar_freq + spec_freq - ctrl_02_freq) < bounds[5]:
+                        return True
+    return False
+
