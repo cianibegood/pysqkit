@@ -60,6 +60,18 @@ def set_target_freqs(
         layout.set_param("anharm", qubit, anharm)
 
 
+def sample_params(layout: Layout, seed: int, resist_var: float):
+    rng = np.random.default_rng(seed)
+
+    freq_var = 0.5 * resist_var
+
+    transmons = layout.get_qubits()
+    for transmon in transmons:
+        target_freq = layout.param("target_freq", transmon)
+        freq = rng.normal(target_freq, freq_var * target_freq)
+        layout.set_param("freq", transmon, freq)
+
+
 def sample_freqs(
     layout: Layout, seed: int, freq_var: float, *, relative_var: Optional[bool] = False
 ):
