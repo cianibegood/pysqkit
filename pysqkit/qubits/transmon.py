@@ -518,7 +518,7 @@ class SimpleTransmon(Qubit):
 
         if self.diel_loss_tan < 0 or self.env_thermal_energy < 0:
             raise ValueError(
-                "Loss tangen and (absolute) "
+                "Loss tangent and (absolute) "
                 "thermal energy kb*T must be positive."
             )
 
@@ -548,12 +548,16 @@ class SimpleTransmon(Qubit):
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
         gamma = self.diel_loss_tan*self._ec * energy_diff ** 2 * phi_km ** 2 / 4
-        nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
-        relaxation_rate = gamma * (nth + 1)
-        excitation_rate = gamma * nth
+        if self.env_thermal_energy > 0:
+            nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
-        return relaxation_rate, excitation_rate
+            relaxation_rate = gamma * (nth + 1)
+            excitation_rate = gamma * nth
+
+            return relaxation_rate, excitation_rate
+        else:
+            return gamma, 0.0
 
     def loss_rates(
         self,
@@ -596,7 +600,7 @@ class SimpleTransmon(Qubit):
         loss_channels: Optional[List[str]] = None,
         as_qobj: Optional[bool] = False,
         *,
-        expand: Optional[bool] = True,
+        expand: Optional[bool] = True
     ) -> List[np.ndarray]:
         ops = self._get_loss_ops(level_k, level_m, loss_channels)
         if expand:

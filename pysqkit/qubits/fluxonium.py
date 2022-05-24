@@ -388,7 +388,7 @@ class Fluxonium(Qubit):
 
         if self.diel_loss_tan < 0 or self.env_thermal_energy < 0:
             raise ValueError(
-                "Loss tangen and (absolute) "
+                "Loss tangent and (absolute) "
                 "thermal energy kb*T must be positive."
             )
 
@@ -422,12 +422,15 @@ class Fluxonium(Qubit):
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
         gamma = diel_loss_tan_eff*self._ec*energy_diff**2*phi_km**2/4
-        nth = average_photon(energy_diff*self._ec, self.env_thermal_energy)
+        if self.env_thermal_energy > 0:
+            nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
-        relaxation_rate = gamma*(nth + 1)
-        excitation_rate = gamma*nth
+            relaxation_rate = gamma * (nth + 1)
+            excitation_rate = gamma * nth
 
-        return relaxation_rate, excitation_rate       
+            return relaxation_rate, excitation_rate
+        else:
+            return gamma, 0.0    
 
     def loss_rates(
         self,
