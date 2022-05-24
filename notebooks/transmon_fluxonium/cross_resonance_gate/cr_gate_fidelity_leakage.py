@@ -162,32 +162,27 @@ def get_fidelity_leakage(
     
     q_op = coupled_sys["F"].charge_op()
     freq_drive = transm.max_freq
+    eps = 0.3 #GHy
     t_rise = 10.0 # [ns]
-    t_gate = 130.0
-    cr_coeff = np.abs(mu_yz_flx(comp_states, q_op))
-
-    eps_0 = 0.6
-
-    args_to_pass = (t_gate, t_rise, cr_coeff) #factor of two seems right here
+    t_gate_0 = 200
+    args_to_pass = (t_rise, np.abs(mu_yz_flx(comp_states, q_op))*eps/2) #factor of two seems right here
 
     # We find the total time to obtain the desired gate
 
     start = time.time()
 
-    minimization_result = minimize(func_to_minimize, eps_0, args=args_to_pass)
+    minimization_result = minimize(func_to_minimize, t_tot_0, args=args_to_pass)
 
     end = time.time()
 
-    eps_drive = minimization_result['x'][0] #1/(util.y_z_flx(coupled_sys, 'F')*eps_drive*4)  # [ns]
+    t_gate = minimization_result['x'][0] 
     pts_per_drive_period = 10
-
-    #t_tot = 135
 
     nb_points = int(t_gate*freq_drive*pts_per_drive_period)
     tlist = np.linspace(0, t_gate, nb_points)
 
     coupled_sys['F'].drives['cr_drive_f'].set_params(phase=0, time=tlist, rise_time=t_rise, pulse_time=t_gate,
-                                                     amp=eps_drive, freq=freq_drive)
+                                                     amp=eps, freq=freq_drive)
     
     simu_opt = qtp.solver.Options()
     simu_opt.atol = 1e-12
@@ -218,7 +213,9 @@ def get_fidelity_leakage(
     f_gate_noisy = average_gate_fidelity(cr_super_target, opt_sup_op_noisy, avg_leakage_noisy)
     
     res={}
-    res["transm_freq"] = transm_freq 
+    res["transm_freq"] = transm_freq
+    res["gate_time"] = t_gate
+    res["eps"] = eps
     res["L1"] = avg_leakage
     res["L1_noisy"] = avg_leakage_noisy
     res["fidelity"] = f_gate
