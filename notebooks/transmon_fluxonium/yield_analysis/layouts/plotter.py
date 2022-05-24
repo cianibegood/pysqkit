@@ -42,19 +42,40 @@ class MatplotlibPlotter:
     A plotter based on the matplotlib library for Layout objects.
     """
 
-    zorders = dict(line=3, patch=1, circle=5, text=20,)
+    zorders = dict(
+        line=3,
+        patch=1,
+        circle=5,
+        text=20,
+    )
 
-    qubit_circ_params = dict(radius=0.35, lw=1, ec="black",)
+    qubit_circ_params = dict(
+        radius=0.35,
+        lw=1,
+        ec="black",
+    )
 
-    qubit_hexagon_params = dict(radius=0.35, lw=1, ec="black")
+    qubit_hexagon_params = dict(radius=0.4, lw=1, ec="black")
 
-    label_params = dict(ha="center", va="center", weight="bold",)
+    label_params = dict(
+        ha="center",
+        va="center",
+        weight="bold",
+    )
 
-    line_params = dict(color="black", linestyle="--", lw=1,)
+    line_params = dict(
+        color="black",
+        linestyle="--",
+        lw=1,
+    )
 
     patch_params = dict(lw=0, alpha=0.3)
 
-    def __init__(self, layout: Layout, ax: Optional[plt.Axes] = None,) -> None:
+    def __init__(
+        self,
+        layout: Layout,
+        ax: Optional[plt.Axes] = None,
+    ) -> None:
         for qubit in layout.get_qubits():
             if not layout.param("coords", qubit):
                 raise ValueError(
@@ -80,7 +101,11 @@ class MatplotlibPlotter:
             q_label = f"${label}_\\mathrm{{{ind}}}$"
 
         self.ax.text(
-            x, y, q_label, zorder=self.zorders["text"], **self.label_params,
+            x,
+            y,
+            q_label,
+            zorder=self.zorders["text"],
+            **self.label_params,
         )
 
     def _draw_qubit_circ(self, x, y, color):
@@ -104,7 +129,10 @@ class MatplotlibPlotter:
 
     def _draw_patch(self, cords, color):
         patch = plt.Polygon(
-            cords, color=color, zorder=self.zorders["patch"], **self.patch_params,
+            cords,
+            color=color,
+            zorder=self.zorders["patch"],
+            **self.patch_params,
         )
         self.ax.add_artist(patch)
 
@@ -135,7 +163,9 @@ class MatplotlibPlotter:
                 elif qubit_type == "fluxonium":
                     self._draw_qubit_hexagon(x, y, color)
                 else:
-                    raise ValueError(f"Unknown qubit type {qubit_type} for qubit {qubit}")
+                    raise ValueError(
+                        f"Unknown qubit type {qubit_type} for qubit {qubit}"
+                    )
                 if label_qubits:
                     if param_label:
                         param_val = self.layout.param(param_label, qubit)
@@ -171,7 +201,10 @@ class MatplotlibPlotter:
                     self._draw_patch(cords, color)
 
     def plot(
-        self, label_qubits=True, draw_patches=True, param_label=None,
+        self,
+        label_qubits=True,
+        draw_patches=True,
+        param_label=None,
     ):
         self._draw_qubits(label_qubits, param_label)
         if draw_patches:

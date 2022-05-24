@@ -744,7 +744,7 @@ class QubitSystem:
     @property
     def qubits(self) -> List[Qubit]:
         return self._qubits
-    
+
     @property
     def labels(self) -> List[str]:
         return self._labels
@@ -1007,13 +1007,6 @@ class QubitSystem:
 
  
 
-
-            
-
-
-
-        
-       
 
     def mat_elements(
         self,

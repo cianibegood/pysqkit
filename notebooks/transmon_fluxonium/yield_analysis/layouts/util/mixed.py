@@ -4,11 +4,6 @@ import numpy as np
 from pysqkit.qubits import Fluxonium
 
 from ..layout import Layout
-from ..collisions.mixed import (
-    address_collision,
-    cross_res_collision,
-    spectator_collision,
-)
 
 
 def _combine_dirs(direction_i, direction_j):
@@ -54,8 +49,8 @@ def set_freq_groups(layout: Layout) -> None:
 
     dfs_assign(init_transmon, init_group)
 
-    fluxonia = layout.get_qubits(qubit_type="fluxonium")
-    for fluxonium in fluxonia:
+    fluxoniums = layout.get_qubits(qubit_type="fluxonium")
+    for fluxonium in fluxoniums:
         layout.set_param("freq_group", fluxonium, 0)
 
 
@@ -66,39 +61,43 @@ def set_transmon_target_freqs(
         raise ValueError(
             "5 distinct qubit frequencies are required for the square layout."
         )
-    qubits = layout.get_qubits(qubit_type="transmon")
+    transmons = layout.get_qubits(qubit_type="transmon")
 
-    for qubit in qubits:
+    for transmon in transmons:
         try:
-            freq_group = layout.param("freq_group", qubit)
+            freq_group = layout.param("freq_group", transmon)
         except KeyError:
             raise ValueError(
-                f"Layout does not define a frequency group for qubit {qubit}."
+                f"Layout does not define a frequency group for qubit {transmon}."
             )
 
         if freq_group is None:
             raise ValueError(
-                f"Layout does not define a frequency group for qubit {qubit}."
+                f"Layout does not define a frequency group for qubit {transmon}."
             )
 
         if freq_group == 0:
             raise ValueError("Only fluxonia can have frequency group 0")
 
         target_freq = group_freqs[freq_group - 1]
-        layout.set_param("target_freq", qubit, target_freq)
+        layout.set_param("target_freq", transmon, target_freq)
 
         anharm = group_anharms[freq_group - 1]
-        layout.set_param("anharm", qubit, anharm)
+        layout.set_param("anharm", transmon, anharm)
 
 
-def set_fluxonia_target_energies(
-    layout: Layout, target_induct_energy: float, target_joseph_energy: float
+def set_fluxonium_target_params(
+    layout: Layout,
+    charge_energy: float,
+    induct_energy: float,
+    joseph_energy: float,
 ) -> None:
-    qubits = layout.get_qubits(qubit_type="fluxonium")
+    fluxoniums = layout.get_qubits(qubit_type="fluxonium")
 
-    for qubit in qubits:
-        layout.set_param("target_induct_energy", qubit, target_induct_energy)
-        layout.set_param("target_joseph_energy", qubit, target_joseph_energy)
+    for fluxonium in fluxoniums:
+        layout.set_param("target_charge_energy", fluxonium, charge_energy)
+        layout.set_param("target_induct_energy", fluxonium, induct_energy)
+        layout.set_param("target_joseph_energy", fluxonium, joseph_energy)
 
 
 def sample_params(
@@ -106,9 +105,8 @@ def sample_params(
     seed: int,
     resist_var: float,
     *,
-    charge_energy=1,
     num_junctions=100,
-    num_fluxonium_levels=5,
+    num_fluxonium_levels=6,
 ):
     rng = np.random.default_rng(seed)
 
@@ -134,6 +132,8 @@ def sample_params(
             target_joseph_energy, joseph_var * target_joseph_energy
         )
 
+        charge_energy = layout.param("target_charge_energy", fluxonium)
+
         fluxonium_qubit = Fluxonium(
             label="fluxonium",
             charge_energy=charge_energy,
@@ -146,37 +146,107 @@ def sample_params(
         layout.set_param("freqs", fluxonium, level_freqs)
 
 
-def get_collisions(layout: Layout) -> List[int]:
-    num_address_collisions = 0
-    num_cross_res_collisions = 0
-    num_spectator_collisions = 0
+def get_num_collisions(layout: Layout, bounds: List[float]) -> List[int]:
+    num_collisions = np.zeros(7, dtype=int)
 
-    fluxonia = layout.get_qubits(qubit_type="fluxonium")
-    for fluxonium in fluxonia:
-        freqs_fluxonium = layout.param("freqs", fluxonium)
+    fluxoniums = layout.get_qubits(qubit_type="fluxonium")
+    for fluxonium in fluxoniums:
+        flux_freqs = layout.param("freqs", fluxonium)
+
+        ctrl_freq_21 = flux_freqs[2] - flux_freqs[1]
+        ctrl_freq_30 = flux_freqs[3] - flux_freqs[0]
+        ctrl_freq_40 = flux_freqs[4] - flux_freqs[0]
+        ctrl_freq_50 = flux_freqs[5] - flux_freqs[0]
+
         transmons = layout.get_neighbors(fluxonium)
 
         for transmon in transmons:
-            transmon_freq = layout.param("freq", transmon)
-            # transmon_anharm = layout.param("anharm", transmon)
+            tar_freq = layout.param("freq", transmon)
 
-            if address_collision(transmon_freq, freqs_fluxonium):
-                num_address_collisions += 1
+            if abs(tar_freq - ctrl_freq_21) < bounds[0]:
+                num_collisions[0] += 1
 
-            if cross_res_collision(transmon_freq, freqs_fluxonium):
-                num_cross_res_collisions += 1
+            if abs(tar_freq - ctrl_freq_30) < bounds[0]:
+                num_collisions[0] += 1
 
-            for spectator in transmons:
-                if spectator != transmon:
-                    spectator_freq = layout.param("freq", spectator)
-                    spectator_anharm = layout.param("anharm", spectator)
+            if tar_freq < ctrl_freq_21:
+                num_collisions[1] += 1
 
-                    if spectator_collision(
-                        transmon_freq, spectator_freq, spectator_anharm,
-                    ):
-                        num_spectator_collisions += 1
-    result = np.array(
-        [num_address_collisions, num_cross_res_collisions, num_spectator_collisions],
-        dtype=int,
-    )
-    return result
+            if tar_freq > ctrl_freq_30:
+                num_collisions[1] += 1
+
+            if abs(2 * tar_freq - ctrl_freq_40) < bounds[1]:
+                num_collisions[2] += 1
+
+            if abs(3 * tar_freq - ctrl_freq_50) < bounds[2]:
+                num_collisions[3] += 1
+
+            for spec_qubit in transmons:
+                if spec_qubit != transmon:
+                    spec_freq = layout.param("freq", spec_qubit)
+                    spec_anharm = layout.param("anharm", spec_qubit)
+
+                    if abs(tar_freq - spec_freq) < bounds[3]:
+                        num_collisions[4] += 1
+
+                    spec_12_freq = spec_freq + spec_anharm
+                    if abs(tar_freq - spec_12_freq) < bounds[4]:
+                        num_collisions[5] += 1
+
+                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[5]:
+                        num_collisions[6] += 1
+
+    return num_collisions
+
+
+def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
+    if len(bounds) != 6:
+        raise ValueError("Expected only 6 bounds to be provided.")
+
+    fluxoniums = layout.get_qubits(qubit_type="fluxonium")
+    for fluxonium in fluxoniums:
+        flux_freqs = layout.param("freqs", fluxonium)
+
+        ctrl_freq_21 = flux_freqs[2] - flux_freqs[1]
+        ctrl_freq_30 = flux_freqs[3] - flux_freqs[0]
+        ctrl_freq_40 = flux_freqs[4] - flux_freqs[0]
+        ctrl_freq_50 = flux_freqs[5] - flux_freqs[0]
+
+        transmons = layout.get_neighbors(fluxonium)
+
+        for transmon in transmons:
+            tar_freq = layout.param("freq", transmon)
+
+            if abs(tar_freq - ctrl_freq_21) < bounds[0]:
+                return True
+
+            if abs(tar_freq - ctrl_freq_30) < bounds[0]:
+                return True
+
+            if tar_freq < ctrl_freq_21:
+                return True
+
+            if tar_freq > ctrl_freq_30:
+                return True
+
+            if abs(2 * tar_freq - ctrl_freq_40) < bounds[1]:
+                return True
+
+            if abs(3 * tar_freq - ctrl_freq_50) < bounds[2]:
+                return True
+
+            for spec_qubit in transmons:
+                if spec_qubit != transmon:
+                    spec_freq = layout.param("freq", spec_qubit)
+                    spec_anharm = layout.param("anharm", spec_qubit)
+
+                    if abs(tar_freq - spec_freq) < bounds[3]:
+                        return True
+
+                    spec_12_freq = spec_freq + spec_anharm
+                    if abs(tar_freq - spec_12_freq) < bounds[4]:
+                        return True
+
+                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[5]:
+                        return True
+    return False
