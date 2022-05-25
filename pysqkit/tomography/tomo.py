@@ -18,7 +18,8 @@ class TomoEnv:
         system: Union[Qubit, QubitSystem],
         time: np.ndarray,
         options: qtp.solver.Options=None,
-        with_noise: bool=False
+        with_noise: bool=False,
+        dressed_noise: bool=False
         ):
             """
             Class to perform tomography
@@ -45,10 +46,20 @@ class TomoEnv:
 
             if with_noise:            
                 if isinstance(system, QubitSystem):
-                    collapse_ops = [op for qubit in \
-                        system for op in qubit.collapse_ops(as_qobj=True)]
-                    dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
-                        for qubit in system]
+                    if dressed_noise:
+                        u = system.diagonalizing_unitary(as_qobj=True)
+                        collapse_ops = [u*op*u.dag() for qubit in \
+                            system for op in qubit.collapse_ops(as_qobj=True) \
+                                if op is not None]
+                        dephasing_ops = \
+                            [u*qubit.dephasing_op(as_qobj=True)*u.dag() \
+                                for qubit in system if \
+                                    qubit.dephasing_op(as_qobj=True) is not None]
+                    else:
+                        collapse_ops = [op for qubit in \
+                            system for op in qubit.collapse_ops(as_qobj=True)]
+                        dephasing_ops = [qubit.dephasing_op(as_qobj=True) \
+                            for qubit in system]
                     if None in dephasing_ops:
                         self._jump_op = collapse_ops
                     else:

@@ -970,7 +970,43 @@ class QubitSystem:
             else:
                 energy_dict[state_label] = (energy, state)
         
-        return energy_dict 
+        return energy_dict
+
+    def diagonalizing_unitary(
+        self,
+        as_qobj: Optional[bool] = False
+    ) -> Union[np.ndarray, Qobj]:
+        
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the unitary that diagonalizes the coupled Hamiltonian
+        """
+        u = np.zeros([self.dim_hilbert, self.dim_hilbert], dtype=complex)
+
+        states_dict = self.states_as_dict()
+
+        col = 0
+
+        for key in states_dict.keys():
+            u[:, col] = states_dict[key][1]
+            col += 1
+        
+        if as_qobj:
+            sys_dims = [qubit.basis.truncated_dim for qubit in self._qubits]
+            qobj_op = Qobj(
+                inpt=u,
+                dims=[sys_dims, sys_dims],
+                shape=u.shape,
+                type="oper",
+                isherm=True,
+            )
+            return qobj_op
+        else:
+            return u
+
+ 
+
 
     def mat_elements(
         self,
