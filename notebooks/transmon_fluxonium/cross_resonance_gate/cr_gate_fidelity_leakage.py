@@ -20,45 +20,12 @@ from pysqkit.drives.pulse_shapes import gaussian_top
 import qutip
 from typing import List, Dict, Callable
 import multiprocessing
-import util_cr as util
+import util_tf_cr
 import matplotlib
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
 import copy
 import json
 import cmath
-
-def mu_yz_flx(comp_states, op) -> float:
-    yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'])
-    yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'])
-    return (np.imag(yz0 - yz1))/2
-
-def mu_zy_transm(comp_states, op) -> float:
-    yz0 = get_mat_elem(op, comp_states['00'], comp_states['01'])
-    yz1 = get_mat_elem(op, comp_states['10'], comp_states['11'] )
-    return (np.imag(yz0 - yz1))/2
-
-def mu_yi_flx(comp_states, op) -> float:
-    yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'] )
-    yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'] )
-    return (np.imag(yz0 + yz1))/2
-
-def mu_yz_flx_sw(
-    transm: Qubit,
-    flx: Qubit,
-    jc: float
-):
-    q_zpf = transm.charge_zpf
-    omega_t = transm.freq
-    omega_flx, states_flx = flx.eig_states(4)
-    omega_flx = omega_flx - omega_flx[0]
-    q_10 = np.imag(get_mat_elem(flx.charge_op(), states_flx[1], states_flx[0]))
-    q_21 = np.imag(get_mat_elem(flx.charge_op(), states_flx[2], states_flx[1]))
-    q_30 = np.imag(get_mat_elem(flx.charge_op(), states_flx[3], states_flx[0]))
-    coeff = q_21**2/(omega_flx[2] - (omega_t + omega_flx[1]))
-    coeff += -q_30**2/(omega_flx[3] - omega_t)
-    coeff += q_10**2/(omega_t - omega_flx[1]) 
-    mu_yz = jc*q_zpf*coeff/2
-    return mu_yz
 
 def func_to_minimize(
     pulse_time: list,
@@ -96,7 +63,7 @@ def optimal_sup_op(
     sup_op_target: np.ndarray,
     sup_op: np.ndarray    
 ):
-    sq_corr = util.single_qubit_corrections(sup_op, weyl_by_index)
+    sq_corr = util_tf_cr.single_qubit_corrections(sup_op, weyl_by_index)
     sq_corr_sup = trf.kraus_to_super(sq_corr, weyl_by_index)
     total_sup_op = sq_corr_sup.dot(sup_op)
     fid_list_ry = []
@@ -130,7 +97,7 @@ def get_fidelity_leakage(
     levels_t = 3
     transm = pysqkit.qubits.SimpleTransmon(
         label='T', 
-        max_freq=transm_freq, #parameters_set[p_set]["max_freq_t"], 
+        max_freq=transm_freq,  
         anharm=parameters_set[p_set]["anharm_t"],
         diel_loss_tan=parameters_set[p_set]["diel_loss_tan_t"],
         env_thermal_energy=thermal_energy,    
@@ -183,13 +150,11 @@ def get_fidelity_leakage(
     op = coupled_sys["F"].charge_op()
     freq_drive = transm.max_freq
     t_rise = 10.0 # [ns]
+    cr_coeff = np.abs(util_tf_cr.mu_yz_flx_sw(transm, flx, jc, eps))
 
     t_gate_0 = [200.0]
 
-    args_to_pass = (t_rise, np.abs(mu_yz_flx_sw(transm, flx, jc))*eps/2) 
-    #args_to_pass = (t_rise, np.abs(mu_yz_flx(comp_states, op))*eps/2) 
-
-    # We find the total time to obtain the desired gate
+    args_to_pass = (t_rise, cr_coeff) 
 
     start = time.time()
 
@@ -203,8 +168,6 @@ def get_fidelity_leakage(
     t_gate = minimization_result['x'][0] 
     print("t_gate: {} ns".format(t_gate))
     pts_per_drive_period = 10
-
-    #t_tot = 135
 
     nb_points = int(t_gate*freq_drive*pts_per_drive_period)
     tlist = np.linspace(0, t_gate, nb_points)

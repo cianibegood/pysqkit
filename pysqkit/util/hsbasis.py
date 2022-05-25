@@ -6,6 +6,8 @@
 import numpy as np
 from typing import List, Callable, Union
 
+# Qudit Weyl basis
+
 def weyl(
     xi_x: int,
     xi_z: int,
@@ -50,7 +52,6 @@ def weyl(
         return 1/np.sqrt(d)*1j**(xi_x*xi_z)*x_pow.dot(z_pow)
         
 
-
 def weyl_by_index(
     i: int,
     d: int
@@ -67,6 +68,93 @@ def weyl_by_index(
     xi_x = i // d
     xi_z = i % d
     return weyl(xi_x, xi_z, d)
+
+# ----------------------------------------------------------------------------
+
+# Qubit Pauli basis
+
+def pauli(xi: Union[np.ndarray, List]) -> np.ndarray:
+    """ 
+    Description
+    --------------------------------------------------------------------------
+    Returns the normalized Pauli operator on n qubits associated with the 
+    binary vector xi. 
+    """
+
+    n = int(len(xi)/2)
+    x = np.array([[0, 1], [1, 0]], dtype=complex)
+    z = np.array([[1, 0], [0, -1]], dtype=complex)
+    x_xi = np.linalg.matrix_power(x, xi[0])
+    z_xi = np.linalg.matrix_power(z, xi[n])
+    f = xi[0]*xi[n]
+    for k in range(1, n):
+        f += xi[k]*xi[n + k]
+        x_xi = np.kron(x_xi, np.linalg.matrix_power(x, xi[k]))
+        z_xi = np.kron(z_xi, np.linalg.matrix_power(z, xi[n + k]))
+    d_xi = (1j)**f*x_xi.dot(z_xi)
+    return d_xi/np.sqrt(2**n)
+
+def decimal_to_binary(
+    k: int, 
+    nbit: int
+    ) -> np.ndarray:
+    """
+    Description
+    --------------------------------------------------------------------------
+    Returns the integer k as a binary vector with nbit
+    """
+
+    y = np.zeros(nbit, dtype=int)
+    iterate = True
+    x = np.mod(k, 2)
+    y[nbit - 1] = int(x)
+    if nbit > 1:
+        k = (k - x)/2
+        l = 1
+        while iterate == True:
+            l += 1
+            x = np.mod(k, 2)
+            y[nbit - l] = int(x)
+            k = (k - x)/2
+            if k <= 0:
+                iterate = False
+    return y
+
+def binary_to_decimal(k_bin: np.ndarray) -> int:
+    """
+    Description
+    --------------------------------------------------------------------------
+    Returns the integer associated with a binary vector
+    """
+
+    n = len(k_bin)
+    y = k_bin[n-1]
+    for l in range(1, n):
+        y += 2**l*k_bin[n -l -1]
+    return y
+
+def pauli_by_index(
+    i: int,
+    d: int
+) -> np.ndarray:
+
+    """ 
+    Description
+    --------------------------------------------------------------------------
+    Returns the normalized Pauli operator on n = log_2(d) qubits associated 
+    with the integer i 
+    """
+    
+    if np.mod(np.log2(d), 1) != 0.0 or d <= 0:
+        raise ValueError("Dimension error: d must be a positive power of 2")
+    
+    n = int(np.log2(d))
+    xi = decimal_to_binary(i, 2*n)
+    
+    return pauli(xi)
+
+# ----------------------------------------------------------------------------
+
 
 def iso_basis(
     i: int,
@@ -89,6 +177,7 @@ def iso_basis(
         for m in range(0, d):
             ket_bra = np.outer(input_states[n], input_states[m].conj())
             v_iso += v[n, m]*ket_bra 
-    return v_iso 
+    return v_iso
+
 
 

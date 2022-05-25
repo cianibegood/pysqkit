@@ -9,6 +9,8 @@ from pysqkit.systems.system import QubitSystem, Qubit, Drive
 from pysqkit.util.linalg import hilbert_schmidt_prod
 from pysqkit.util.hsbasis import iso_basis
 
+from pysqkit.util.hsbasis import pauli_by_index
+
 import multiprocessing
 from functools import partial
          
@@ -88,6 +90,8 @@ class TomoEnv:
                     for label, drive in self._system.drives.items():
                         self.hamil_drive.append(drive.hamiltonian(as_qobj=True))
                         self.pulse_drive.append(drive.eval_pulse())
+            
+            self._hs_basis_speed_up = ["pauli_by_index"]
         
     @property
     def system(self):
@@ -105,7 +109,7 @@ class TomoEnv:
                            "mesolve", options=self._options)
                     
         res = result.states[-1]
-        return res   
+        return res  
     
     def evolve_hs_basis(
         self,
@@ -137,11 +141,56 @@ class TomoEnv:
             evolved_basis_i += eigvals[n]*evolved_iso_eigvec[:, :]
         return evolved_basis_i
     
+    def evolve_pauli_basis(
+        self,
+        i: int,
+        input_states: List[np.ndarray]
+    ):
+        
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the action of the quantum operation associated 
+        with the time evolution on the i-th normalized Pauli operator. 
+        It provides a speed-up over the more general evolve_hs_basis method
+        that can be used with arbitrary Hilbert-Schmidt basis
+        """
+
+        if isinstance(self._system, QubitSystem):
+            subsys_dims = list(q.dim_hilbert for q in self._system)
+        elif isinstance(self._system, Qubit):
+            subsys_dims = [self._system.dim_hilbert]
+
+        d = len(input_states)
+
+        pauli_op = np.sqrt(d)*pauli_by_index(i, d)
+
+        proj_comp_subspace = np.einsum('ai, aj -> ij', input_states, 
+                                       np.conj(input_states))
+        pauli_op_repr = np.einsum('kl, ki, lj -> ij', pauli_op, 
+                                  input_states, np.conj(input_states))
+        
+        # Mixed state on subspace with eigenvalue +1 
+
+        rho_plus = qtp.Qobj(inpt=(proj_comp_subspace + pauli_op_repr)/d, 
+                            dims=[subsys_dims, subsys_dims], isherm=True)
+
+        # Mixed state on subspace with eigenvalue -1 
+
+        rho_minus = qtp.Qobj(inpt=(proj_comp_subspace - pauli_op_repr)/d, 
+                            dims=[subsys_dims, subsys_dims], isherm=True)
+
+        rho_plus_evolved = self.simulate(rho_plus)
+        rho_minus_evolved = self.simulate(rho_minus)
+
+        return rho_plus_evolved - rho_minus_evolved
+    
     def to_super( 
         self, 
         input_states: List[np.ndarray], 
         hs_basis: Callable[[int, int], np.ndarray],
-        n_process: int=1
+        n_process: int=1,
+        speed_up: bool=False
     ) -> np.ndarray:
     
         """
@@ -155,6 +204,12 @@ class TomoEnv:
         processes n_process, which is 1 by default.
         """
 
+        unsupported_basis = hs_basis.__name__ not in self._hs_basis_speed_up
+
+        if speed_up == True and unsupported_basis:
+            raise ValueError("Basis error: unsupported basis for speed-up"
+                             "Set speed_up to False to run with this basis")
+
         d = len(input_states)
         superoperator = np.zeros([d**2, d**2], dtype=complex)
         # basis = [] 
@@ -167,23 +222,35 @@ class TomoEnv:
         if n_process > 1:
 
             pool = multiprocessing.Pool(processes=n_process)
-            func = partial(self.evolve_hs_basis, input_states=input_states,
-                        hs_basis=hs_basis)
+            if speed_up:
+                func = partial(self.evolve_pauli_basis, 
+                               input_states=input_states)
+            else:
+                func = partial(self.evolve_hs_basis, input_states=input_states, 
+                               hs_basis=hs_basis)
 
-            evolved_basis = pool.map(func, index_list, chunksize=int(d**2//n_process))
+            evolved_basis = pool.map(func, index_list, 
+                                     chunksize=int(d**2//n_process))
 
             pool.close()
             pool.join()
         else:
             evolved_basis = []
             for index in index_list:
-                ev_tmp = self.evolve_hs_basis(index, input_states=input_states, 
-                                              hs_basis=hs_basis)
+                if speed_up:
+                    ev_tmp = self.evolve_pauli_basis(index, 
+                                                     input_states=input_states)
+                else:
+                    ev_tmp = self.evolve_hs_basis(index, 
+                                                  input_states=input_states, 
+                                                  hs_basis=hs_basis)
+
                 evolved_basis.append(ev_tmp)
         
         for i in range(0, d**2):
             for k in range(0, d**2):
-                superoperator[k, i] = hilbert_schmidt_prod(basis[k], evolved_basis[i])
+                superoperator[k, i] = hilbert_schmidt_prod(basis[k], 
+                                                           evolved_basis[i])
         
         return superoperator
     
