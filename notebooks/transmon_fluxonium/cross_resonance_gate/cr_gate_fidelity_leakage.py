@@ -5,7 +5,7 @@ import qutip as qtp
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import pysqkit
-from pysqkit import QubitSystem
+from pysqkit import QubitSystem, Qubit
 from pysqkit.drives.pulse_shapes import gaussian_top
 from pysqkit.util.metrics import average_process_fidelity, \
     average_gate_fidelity
@@ -42,18 +42,35 @@ def mu_yi_flx(comp_states, op) -> float:
     yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'] )
     return (np.imag(yz0 + yz1))/2
 
+def mu_yz_flx_sw(
+    transm: Qubit,
+    flx: Qubit,
+    jc: float
+):
+    q_zpf = transm.charge_zpf
+    omega_t = transm.freq
+    omega_flx, states_flx = flx.eig_states(4)
+    omega_flx = omega_flx - omega_flx[0]
+    q_10 = np.imag(get_mat_elem(flx.charge_op(), states_flx[1], states_flx[0]))
+    q_21 = np.imag(get_mat_elem(flx.charge_op(), states_flx[2], states_flx[1]))
+    q_30 = np.imag(get_mat_elem(flx.charge_op(), states_flx[3], states_flx[0]))
+    coeff = q_21**2/(omega_flx[2] - (omega_t + omega_flx[1]))
+    coeff += -q_30**2/(omega_flx[3] - omega_t)
+    coeff += q_10**2/(omega_t - omega_flx[1]) 
+    mu_yz = jc*q_zpf*coeff/2
+    return mu_yz
+
 def func_to_minimize(
-    eps: float,
-    pulse_time: float,
+    pulse_time: list,
     t_rise: float,
     cr_coeff: float
 ) -> float:
     step = 1e-3
-    n_points = int(pulse_time/step)
-    times = np.linspace(0, pulse_time, n_points)
-    pulse = gaussian_top(times, t_rise, pulse_time)
-    integral = scipy.integrate.simpson(2*np.pi*(eps*cr_coeff/2)*pulse, times)
-    return np.abs(integral - np.pi/4)  #Watch out factor of 2?  
+    n_points = int(pulse_time[0]/step)
+    times = np.linspace(0, pulse_time[0], n_points)
+    pulse = gaussian_top(times, t_rise, pulse_time[0])
+    integral = scipy.integrate.simpson(2*np.pi*cr_coeff*pulse, times)
+    return np.abs(integral - np.pi/4)  
 
 def cry(theta):
     ide = np.identity(4)
@@ -86,7 +103,8 @@ def optimal_sup_op(
     theta_list = list(np.linspace(0, 2*np.pi, 100))
     for theta in theta_list:
         rot_y_super = trf.kraus_to_super(ry_t(theta), weyl_by_index)
-        fid_list_ry.append(average_process_fidelity(sup_op_target, rot_y_super.dot(total_sup_op)))
+        fid_list_ry.append(average_process_fidelity(sup_op_target, \
+            rot_y_super.dot(total_sup_op)))
 
     fid_ry = np.array(fid_list_ry)
 
@@ -145,7 +163,8 @@ def get_fidelity_leakage(
     d_leak = levels_t*levels_f - d_comp
 
     jc = parameters_set[p_set]["jc"]
-    coupled_sys = transm.couple_to(flx, coupling=pysqkit.couplers.capacitive_coupling, strength=jc)
+    coupled_sys = transm.couple_to(flx, \
+        coupling=pysqkit.couplers.capacitive_coupling, strength=jc)
     
 
     states_label = coupled_sys.all_state_labels()
@@ -160,28 +179,39 @@ def get_fidelity_leakage(
         state_tmp = np.exp(-1j*phase)*state_tmp
         comp_states[label] = state_tmp
     
-    q_op = coupled_sys["F"].charge_op()
+    eps = 0.3
+    op = coupled_sys["F"].charge_op()
     freq_drive = transm.max_freq
-    eps = 0.3 #GHy
     t_rise = 10.0 # [ns]
-    t_gate_0 = 200
-    args_to_pass = (t_rise, np.abs(mu_yz_flx(comp_states, q_op))*eps/2) #factor of two seems right here
+
+    t_gate_0 = [200.0]
+
+    args_to_pass = (t_rise, np.abs(mu_yz_flx_sw(transm, flx, jc))*eps/2) 
+    #args_to_pass = (t_rise, np.abs(mu_yz_flx(comp_states, op))*eps/2) 
 
     # We find the total time to obtain the desired gate
 
     start = time.time()
 
-    minimization_result = minimize(func_to_minimize, t_tot_0, args=args_to_pass)
+    minimization_result = minimize(func_to_minimize, t_gate_0, 
+                                   args=args_to_pass)
+
+    print(minimization_result)
 
     end = time.time()
 
     t_gate = minimization_result['x'][0] 
+    print("t_gate: {} ns".format(t_gate))
     pts_per_drive_period = 10
+
+    #t_tot = 135
 
     nb_points = int(t_gate*freq_drive*pts_per_drive_period)
     tlist = np.linspace(0, t_gate, nb_points)
 
-    coupled_sys['F'].drives['cr_drive_f'].set_params(phase=0, time=tlist, rise_time=t_rise, pulse_time=t_gate,
+    coupled_sys['F'].drives['cr_drive_f'].set_params(phase=0, time=tlist, 
+                                                     rise_time=t_rise, 
+                                                     pulse_time=t_gate, 
                                                      amp=eps, freq=freq_drive)
     
     simu_opt = qtp.solver.Options()
@@ -224,15 +254,16 @@ def get_fidelity_leakage(
     return res
 
 def main():
-    n_points = 200
-    n_processes = 200
+    n_points = 2
+    n_processes = 2
     freq_list = np.linspace(4.2, 5.8, n_points)
 
     start = time.time()
 
     pool = multiprocessing.Pool(processes=n_processes)
 
-    result = pool.map(get_fidelity_leakage, freq_list, chunksize=int(n_points//n_processes))
+    result = pool.map(get_fidelity_leakage, freq_list, 
+                      chunksize=int(n_points//n_processes))
 
     pool.close()
     pool.join()
