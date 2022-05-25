@@ -14,7 +14,7 @@ from pysqkit.util.quantum import generalized_rabi_frequency
 import pysqkit.util.transformations as trf
 from pysqkit.util.linalg import get_mat_elem
 from pysqkit.solvers.solvkit import integrate
-from pysqkit.util.hsbasis import weyl_by_index
+from pysqkit.util.hsbasis import weyl_by_index, pauli_by_index
 from pysqkit.solvers import solvkit
 from pysqkit.drives.pulse_shapes import gaussian_top
 import qutip
@@ -61,22 +61,23 @@ def ry_f(theta):
 
 def optimal_sup_op(
     sup_op_target: np.ndarray,
-    sup_op: np.ndarray    
+    sup_op: np.ndarray,
+    hs_basis: Callable[[int, int], np.ndarray]    
 ):
-    sq_corr = util_tf_cr.single_qubit_corrections(sup_op, weyl_by_index)
-    sq_corr_sup = trf.kraus_to_super(sq_corr, weyl_by_index)
+    sq_corr = util_tf_cr.single_qubit_corrections(sup_op, hs_basis)
+    sq_corr_sup = trf.kraus_to_super(sq_corr, hs_basis)
     total_sup_op = sq_corr_sup.dot(sup_op)
     fid_list_ry = []
     theta_list = list(np.linspace(0, 2*np.pi, 100))
     for theta in theta_list:
-        rot_y_super = trf.kraus_to_super(ry_t(theta), weyl_by_index)
+        rot_y_super = trf.kraus_to_super(ry_t(theta), hs_basis)
         fid_list_ry.append(average_process_fidelity(sup_op_target, \
             rot_y_super.dot(total_sup_op)))
 
     fid_ry = np.array(fid_list_ry)
 
     max_index = np.argmax(fid_ry)
-    sup_rot_y_opt = trf.kraus_to_super(ry_t(theta_list[max_index]), weyl_by_index)
+    sup_rot_y_opt = trf.kraus_to_super(ry_t(theta_list[max_index]), hs_basis)
     total_sup_op_ry = sup_rot_y_opt.dot(total_sup_op)
     
     return total_sup_op_ry
@@ -185,7 +186,7 @@ def get_fidelity_leakage(
                                           options=simu_opt, with_noise=False)
     
     env_syst_noisy = pysqkit.tomography.TomoEnv(system=coupled_sys, time=2*np.pi*tlist, 
-                                          options=simu_opt, with_noise=True)
+                                                options=simu_opt, with_noise=True)
     
     comp_states_list = []
     for key in comp_states.keys():
@@ -193,11 +194,13 @@ def get_fidelity_leakage(
     
     avg_leakage = env_syst.leakage(comp_states_list)
     avg_leakage_noisy = env_syst_noisy.leakage(comp_states_list)
+
+    my_hs_basis = pauli_by_index
     
-    sup_op = env_syst.to_super(comp_states_list, weyl_by_index)
-    sup_op_noisy = env_syst_noisy.to_super(comp_states_list, weyl_by_index)
+    sup_op = env_syst.to_super(comp_states_list, my_hs_basis, speed_up=True)
+    sup_op_noisy = env_syst_noisy.to_super(comp_states_list, my_hs_basis)
     
-    cr_super_target = trf.kraus_to_super(cry(-np.pi/2), weyl_by_index)
+    cr_super_target = trf.kraus_to_super(cry(-np.pi/2), my_hs_basis)
     
     opt_sup_op = optimal_sup_op(cr_super_target, sup_op)
     opt_sup_op_noisy = optimal_sup_op(cr_super_target, sup_op_noisy)
