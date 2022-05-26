@@ -157,14 +157,8 @@ def get_fidelity_leakage(
 
     args_to_pass = (t_rise, cr_coeff) 
 
-    start = time.time()
-
     minimization_result = minimize(func_to_minimize, t_gate_0, 
                                    args=args_to_pass)
-
-    print(minimization_result)
-
-    end = time.time()
 
     t_gate = minimization_result['x'][0] 
     print("t_gate: {} ns".format(t_gate))
@@ -202,8 +196,8 @@ def get_fidelity_leakage(
     
     cr_super_target = trf.kraus_to_super(cry(-np.pi/2), my_hs_basis)
     
-    opt_sup_op = optimal_sup_op(cr_super_target, sup_op)
-    opt_sup_op_noisy = optimal_sup_op(cr_super_target, sup_op_noisy)
+    opt_sup_op = optimal_sup_op(cr_super_target, sup_op, my_hs_basis)
+    opt_sup_op_noisy = optimal_sup_op(cr_super_target, sup_op_noisy, my_hs_basis)
     
     f_gate = average_gate_fidelity(cr_super_target, opt_sup_op, avg_leakage)
     f_gate_noisy = average_gate_fidelity(cr_super_target, opt_sup_op_noisy, avg_leakage_noisy)
@@ -220,8 +214,8 @@ def get_fidelity_leakage(
     return res
 
 def main():
-    n_points = 2
-    n_processes = 2
+    n_points = 200
+    n_processes = 200
     freq_list = np.linspace(4.2, 5.8, n_points)
 
     start = time.time()
