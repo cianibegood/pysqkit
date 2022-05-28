@@ -164,7 +164,7 @@ def get_fidelity(
     
     my_hs_basis = pauli_by_index
 
-    n_process = 4
+    n_process = 16
     
     cr_super_target = trf.kraus_to_super(cry(-np.pi/2), my_hs_basis)
     
@@ -333,28 +333,28 @@ def get_fidelity(
     return res 
 
 def main():
-    p_set = "CR_1"
+    p_set_list = ["CR_1", "CR_2", "CR_3", "CR_4"]
 
     eps_list = [0.1, 0.2, 0.3, 0.4, 0.5]
 
-    res = []
+    result = {}
 
     start = time.time()
-
-    for eps in eps_list:
-        output = get_fidelity(eps, p_set)
-        res.append(output)
+    
+    for p_set in p_set_list:
+        res = []
+        for eps in eps_list:
+            output = get_fidelity(eps, p_set)
+            res.append(output)
+        result[p_set] = res
     
     end = time.time()
 
     print("Computation time: {} s".format(end - start))
     
-    result = {}
-    result[p_set] = res
-
     save = True
     if save:
-        with open("tmp/cr_fidelity_drive_" + p_set + ".txt", "w") as fp:
+        with open("tmp/cr_fidelity_drive_.txt", "w") as fp:
             json.dump(result, fp)
 
 
