@@ -161,6 +161,8 @@ def get_fidelity(
     res = {}
     
     res["gate_time"] = t_gate
+    res["transm_freq"] = transm.freq
+    res["eps"] = eps
     
     my_hs_basis = pauli_by_index
 
