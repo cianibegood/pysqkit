@@ -166,7 +166,7 @@ def get_num_collisions(layout: Layout, bounds: List[float]) -> List[int]:
 
 
 def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
-    if len(bounds) != 6:
+    if len(bounds) != 7:
         raise ValueError("Expected only 6 bounds to be provided.")
 
     fluxoniums = layout.get_qubits(qubit_type="fluxonium")
