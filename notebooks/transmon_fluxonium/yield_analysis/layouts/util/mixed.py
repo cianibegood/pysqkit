@@ -144,7 +144,10 @@ def sample_params(
 
 
 def get_num_collisions(layout: Layout, bounds: List[float]) -> List[int]:
-    num_collisions = np.zeros(8, dtype=int)
+    if len(bounds) != 8:
+        raise ValueError("Expected only 8 bounds to be provided.")
+
+    num_collisions = np.zeros(9, dtype=int)
 
     fluxoniums = layout.get_qubits(qubit_type="fluxonium")
     for fluxonium in fluxoniums:
@@ -160,6 +163,7 @@ def get_num_collisions(layout: Layout, bounds: List[float]) -> List[int]:
 
         for transmon in transmons:
             tar_freq = layout.param("freq", transmon)
+            tar_anharm = layout.param("anharm", transmon)
 
             if abs(tar_freq - ctrl_freq_21) < bounds[0]:
                 num_collisions[0] += 1
@@ -179,30 +183,33 @@ def get_num_collisions(layout: Layout, bounds: List[float]) -> List[int]:
             if abs(2 * tar_freq - ctrl_freq_51) < bounds[2]:
                 num_collisions[3] += 1
 
-            if abs(3 * tar_freq - ctrl_freq_50) < bounds[3]:
+            if abs(tar_freq - tar_anharm - ctrl_freq_30) < bounds[3]:
                 num_collisions[4] += 1
+
+            if abs(3 * tar_freq - ctrl_freq_50) < bounds[4]:
+                num_collisions[5] += 1
 
             for spec_qubit in transmons:
                 if spec_qubit != transmon:
                     spec_freq = layout.param("freq", spec_qubit)
                     spec_anharm = layout.param("anharm", spec_qubit)
 
-                    if abs(tar_freq - spec_freq) < bounds[4]:
-                        num_collisions[5] += 1
-
-                    spec_12_freq = spec_freq + spec_anharm
-                    if abs(tar_freq - spec_12_freq) < bounds[5]:
+                    if abs(tar_freq - spec_freq) < bounds[5]:
                         num_collisions[6] += 1
 
-                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[6]:
+                    spec_12_freq = spec_freq + spec_anharm
+                    if abs(tar_freq - spec_12_freq) < bounds[6]:
                         num_collisions[7] += 1
+
+                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[7]:
+                        num_collisions[8] += 1
 
     return num_collisions
 
 
 def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
-    if len(bounds) != 7:
-        raise ValueError("Expected only 6 bounds to be provided.")
+    if len(bounds) != 8:
+        raise ValueError("Expected only 8 bounds to be provided.")
 
     fluxoniums = layout.get_qubits(qubit_type="fluxonium")
     for fluxonium in fluxoniums:
@@ -218,6 +225,7 @@ def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
 
         for transmon in transmons:
             tar_freq = layout.param("freq", transmon)
+            tar_anharm = layout.param("anharm", transmon)
 
             if abs(tar_freq - ctrl_freq_21) < bounds[0]:
                 return True
@@ -237,7 +245,10 @@ def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
             if abs(2 * tar_freq - ctrl_freq_51) < bounds[2]:
                 return True
 
-            if abs(3 * tar_freq - ctrl_freq_50) < bounds[3]:
+            if abs(tar_freq - tar_anharm - ctrl_freq_30) < bounds[3]:
+                return True
+
+            if abs(3 * tar_freq - ctrl_freq_50) < bounds[4]:
                 return True
 
             for spec_qubit in transmons:
@@ -245,13 +256,13 @@ def any_collisions(layout: Layout, bounds: List[float]) -> List[int]:
                     spec_freq = layout.param("freq", spec_qubit)
                     spec_anharm = layout.param("anharm", spec_qubit)
 
-                    if abs(tar_freq - spec_freq) < bounds[4]:
+                    if abs(tar_freq - spec_freq) < bounds[5]:
                         return True
 
                     spec_12_freq = spec_freq + spec_anharm
-                    if abs(tar_freq - spec_12_freq) < bounds[5]:
+                    if abs(tar_freq - spec_12_freq) < bounds[6]:
                         return True
 
-                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[6]:
+                    if abs(tar_freq + spec_freq - ctrl_freq_40) < bounds[7]:
                         return True
     return False
