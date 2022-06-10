@@ -1,19 +1,11 @@
-#-----------------------------------------------------------------------------
-# File that contains auxiliary functions to simplify the calculations
-# needed to study the two-qubit gate between a transmon and a fluxonium 
-# using the |1_t 3_f>-|0_t 4_f> inspired by the fluxonium-fluxonium gate 
-# described in Ficheux et al. Phys. Rev. X 11, 021026 (2021)
-#-----------------------------------------------------------------------------
-
 import numpy as np 
 import cmath
 import matplotlib.pyplot as plt 
-from pysqkit import QubitSystem
+from pysqkit import QubitSystem, Qubit
 from pysqkit.util.linalg import get_mat_elem, tensor_prod, \
     hilbert_schmidt_prod
 from typing import List, Callable, Dict
 import pysqkit.util.transformations as trf
-from pysqkit.util.quantum import generalized_rabi_frequency
 import matplotlib
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
 
@@ -95,10 +87,81 @@ def zz(system: QubitSystem) -> float:
         - system.state('01')[0] - system.state('10')[0]
     return xi_zz
 
-def delta(system: QubitSystem) -> float:
-    delta_gate = (system.state('13')[0] - system.state('10')[0]) - \
-        (system.state('03')[0] - system.state('00')[0])
-    return delta_gate 
+def mu_yz_flx(
+    comp_states: List[np.ndarray], 
+    op: np.ndarray,
+    eps: float
+) -> float:
+    """
+    Description
+    ---------------------------------------------------------------------------
+    Evaluates the CR coefficient numerically in the dressed basis when
+    driving the fluxonium
+    """
+    yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'])
+    yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'] )
+    return (np.imag(yz0 - yz1))/2*eps/2
+
+def mu_zy_transm(
+    comp_states: List[np.ndarray], 
+    op: np.ndarray,
+    eps: float
+) -> float:
+    """
+    Description
+    ---------------------------------------------------------------------------
+    Evaluates the CR coefficient numerically in the dressed basis when
+    driving the transmon
+    """
+    yz0 = get_mat_elem(op, comp_states['00'], comp_states['01'])
+    yz1 = get_mat_elem(op, comp_states['10'], comp_states['11'] )
+    return (np.imag(yz0 - yz1))/2
+
+def mu_yi_flx(
+    comp_states: List[np.ndarray], 
+    op: np.ndarray,
+    eps: float
+) -> float:
+    """
+    Description
+    ---------------------------------------------------------------------------
+    Evaluates the direct drive on the transmon numerically in the dressed basis 
+    when driving the fluxonium
+    """
+    yz0 = get_mat_elem(op, comp_states['00'], comp_states['10'] )
+    yz1 = get_mat_elem(op, comp_states['01'], comp_states['11'] )
+    return (np.imag(yz0 + yz1))/2*eps/2
+
+def mu_yz_flx_sw(
+    transm: Qubit,
+    flx: Qubit,
+    jc: float,
+    eps: float
+):
+    """
+    Description
+    ---------------------------------------------------------------------------
+    Evaluates the CR coefficient via the second order Schrieffer-Wolff
+    transformation
+    """
+    q_zpf = transm.charge_zpf
+    omega_t = transm.freq
+    omega_flx, states_flx = flx.eig_states(4)
+    omega_flx = omega_flx - omega_flx[0]
+    q_10 = np.imag(get_mat_elem(flx.charge_op(), states_flx[1], states_flx[0]))
+    q_21 = np.imag(get_mat_elem(flx.charge_op(), states_flx[2], states_flx[1]))
+    q_30 = np.imag(get_mat_elem(flx.charge_op(), states_flx[3], states_flx[0]))
+    coeff = q_21**2/(omega_flx[2] - (omega_t + omega_flx[1]))
+    coeff += -q_30**2/(omega_flx[3] - omega_t)
+    coeff += q_10**2/(omega_t - omega_flx[1]) 
+    mu_yz = jc*q_zpf*coeff/2*eps/2
+    return mu_yz
+
+def cr_gate_time(
+    cr_coeff: float
+):
+    return 1/(2*np.pi*cr_coeff)*np.pi/4
+
 
 def single_qubit_corrections(
     sup_op: np.ndarray,
@@ -124,44 +187,3 @@ def single_qubit_corrections(
     p_phi01 = np.array([[1, 0], [0, np.exp(-1j*phi01)]])
     return tensor_prod([p_phi10, p_phi01])
 
-def func_to_minimize(
-    x0: np.ndarray,
-    levels_first_transition: List['str'],
-    levels_second_transition: List['str'],
-    system: QubitSystem,
-    eps_ratio_dict: Dict    
-) -> float:
-    
-    """
-    Function to minimize in order to match the parameters to 
-    implement a CZ gate up to single-qubit rotations in the Ficheux scheme. 
-    It returns the modulus of [rabi_second_transition - 
-    rabi_first_transition, delta_gate - rabi_first_transition]/delta_gate
-    x0 : np.ndarray([eps_reference, drive_freq]) represents the 
-         parameters to be minimized.
-    levels_first_transition : List with the labels of the first transition 
-                              whose generalized Rabi frequency has to 
-                              be matched
-    levels_second_transition : List with the labels of the second transition 
-                               whose generalized Rabi frequency has to be 
-                               matched
-    system : coupled system we are analyzing
-    eps_ratio_dict : dictionary whose keys are system.labels. The entries 
-                     correspond to the ratios between the corresponding 
-                     qubit drive and the reference drive.     
-    """
-    
-    qubit_labels = system.labels
-    eps = {}
-    for qubit in qubit_labels:
-        eps[qubit] = x0[0]*eps_ratio_dict[qubit]
-    rabi_first_transition = \
-        generalized_rabi_frequency(levels_first_transition, 
-                                   eps, x0[1], system)
-    rabi_second_transition = \
-        generalized_rabi_frequency(levels_second_transition, 
-                                   eps, x0[1], system)
-    delta_gate = delta(system)
-    y = np.sqrt( (rabi_first_transition - rabi_second_transition)**2 + \
-                (rabi_first_transition - delta_gate)**2)
-    return np.abs(y/delta_gate)
