@@ -38,3 +38,10 @@ This work is distributed under the Apache 2.0 License. See LICENSE.txt for the f
 # Citations
 If you happen to use pysqkit for any research, please cite this project as:
 TODO
+
+# Additional infos
+
+The code for the paper 
+
+A. Ciani, B. Varbanov, N. Jolly, C. Andersen, B. Terhal "Microwave-activated gates between a fluxonium and a transmon qubit" (2022) 
+can be found in the branch ciani_et_al in the folder ciani_et_al/
