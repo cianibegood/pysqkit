@@ -7,12 +7,13 @@ Currently the focus is on transmon and fluxonium systems. For these qubits, Pysq
 Qubits can currently be coupled to each other, currently via capacitive couplers. A drive can be applied on each qubit of this system.
 
 # Requirements
+Most versions of the following packages should work. We also provide the explicit versions we used in our machine.
 
-numpy
-scipy
-qutip
-matplotlib
-xarray
+numpy (1.22.4)
+scipy (3.5.2)
+qutip (4.7.0)
+matplotlib (3.5.2)
+xarray (2022.3.0)
 
 # Installation
 Clone the pysqkit repository via git clone. Open the terminal and navigate to the parent folder where the pysqkit folder is stored and run
