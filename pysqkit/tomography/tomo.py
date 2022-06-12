@@ -42,8 +42,8 @@ class TomoEnv:
             elif isinstance(system, Qubit):
                 q_dims = [system.dim_hilbert]
                 self._dims_qobj = [q_dims, [1]]
-                if qubit.is_driven:
-                    for label, drive in qubit.drives.items():
+                if system.is_driven:
+                    for label, drive in system.drives.items():
                         drive.set_params(time=time/(2*np.pi))
 
             if with_noise:            
@@ -170,20 +170,29 @@ class TomoEnv:
         pauli_op_repr = np.einsum('kl, ki, lj -> ij', pauli_op, 
                                   input_states, np.conj(input_states))
         
-        # Mixed state on subspace with eigenvalue +1 
+        if i == 0:
+            rho_plus = qtp.Qobj(inpt=proj_comp_subspace/d, 
+                                dims=[subsys_dims, subsys_dims], isherm=True)
 
-        rho_plus = qtp.Qobj(inpt=(proj_comp_subspace + pauli_op_repr)/d, 
-                            dims=[subsys_dims, subsys_dims], isherm=True)
+            rho_plus_evolved = self.simulate(rho_plus)
 
-        # Mixed state on subspace with eigenvalue -1 
+            return np.sqrt(d)*rho_plus_evolved 
+        
+        else:
+            # Mixed state on subspace with eigenvalue +1 
 
-        rho_minus = qtp.Qobj(inpt=(proj_comp_subspace - pauli_op_repr)/d, 
-                            dims=[subsys_dims, subsys_dims], isherm=True)
+            rho_plus = qtp.Qobj(inpt=(proj_comp_subspace + pauli_op_repr)/(2*np.sqrt(d)), 
+                                dims=[subsys_dims, subsys_dims], isherm=True)
 
-        rho_plus_evolved = self.simulate(rho_plus)
-        rho_minus_evolved = self.simulate(rho_minus)
+            # Mixed state on subspace with eigenvalue -1 
 
-        return rho_plus_evolved - rho_minus_evolved
+            rho_minus = qtp.Qobj(inpt=(proj_comp_subspace - pauli_op_repr)/(2*np.sqrt(d)), 
+                                dims=[subsys_dims, subsys_dims], isherm=True)
+
+            rho_plus_evolved = self.simulate(rho_plus)
+            rho_minus_evolved = self.simulate(rho_minus)
+
+            return rho_plus_evolved - rho_minus_evolved
     
     def to_super( 
         self, 
@@ -202,6 +211,11 @@ class TomoEnv:
         Hilbert-Schmidt basis defined via the function hs_basis. 
         The function can be run in parallel by specifying the number of 
         processes n_process, which is 1 by default.
+
+        Warning
+        ----------------------------------------------------------------------
+        With speed_up = True does not seem to always work. It does not with d
+        d = 2.
         """
 
         unsupported_basis = hs_basis.__name__ not in self._hs_basis_speed_up
