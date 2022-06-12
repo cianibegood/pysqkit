@@ -211,6 +211,7 @@ class TomoEnv:
         Hilbert-Schmidt basis defined via the function hs_basis. 
         The function can be run in parallel by specifying the number of 
         processes n_process, which is 1 by default.
+
         """
 
         unsupported_basis = hs_basis.__name__ not in self._hs_basis_speed_up
