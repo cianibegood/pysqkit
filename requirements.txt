@@ -3,3 +3,4 @@ scipy
 qutip
 matplotlib
 xarray
+cmath
