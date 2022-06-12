@@ -2,30 +2,16 @@ import numpy as np
 import scipy.integrate
 import time
 import qutip as qtp
-import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import pysqkit
-from pysqkit import QubitSystem, Qubit
 from pysqkit.drives.pulse_shapes import gaussian_top
-from pysqkit.util.metrics import average_process_fidelity, \
-    average_gate_fidelity
 from pysqkit.util.phys import temperature_to_thermalenergy
-from pysqkit.util.quantum import generalized_rabi_frequency
-import pysqkit.util.transformations as trf
 from pysqkit.util.linalg import get_mat_elem
-from pysqkit.solvers.solvkit import integrate
-from pysqkit.solvers import solvkit
-from pysqkit.drives.pulse_shapes import gaussian_top
-import qutip
 from typing import List, Dict, Callable
 import multiprocessing
 import util_tt_cr
-import matplotlib
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
-import copy
 import json
 import cmath
-import util_tt_cr 
 
 def func_to_minimize(
     pulse_time: list,
@@ -101,23 +87,20 @@ def get_leakage(
     freq_drive = transm_t.max_freq
     t_rise = 10.0 # [ns]
 
-    t_gate_0 = [200.0]
+    cr_coeff = np.abs(util_tt_cr.mu_yz_sw(jc, eps, transm_t, transm_c))
 
-    args_to_pass = (t_rise, np.abs(util_tt_cr.mu_yz_sw(jc, eps, 
-                                                        transm_t, 
-                                                        transm_c))) 
+    t_gate_0 = [util_tt_cr.cr_gate_time(cr_coeff)]
+
+    args_to_pass = (t_rise, cr_coeff) 
 
     start = time.time()
 
     minimization_result = minimize(func_to_minimize, t_gate_0, 
                                    args=args_to_pass)
 
-    print(minimization_result)
-
     end = time.time()
 
     t_gate = minimization_result['x'][0] 
-    print("t_gate: {} ns".format(t_gate))
     pts_per_drive_period = 10
 
 
@@ -146,7 +129,7 @@ def get_leakage(
     
     avg_leakage = env_syst.leakage(comp_states_list)
     
-    res={}
+    res = {}
     res["transm_freq"] = transm_freq
     res["gate_time"] = t_gate
     res["eps"] = eps
@@ -155,9 +138,9 @@ def get_leakage(
     return res
 
 def main():
-    n_points = 200
-    n_processes = 1
-    freq_list = np.linspace(4.2, 5.8, n_points)
+    n_points = 200 # 200 for the data in the paper
+    n_processes = 1 # set to maximum number of cores in your machine
+    freq_list = list(np.linspace(4.2, 5.8, n_points))
 
     start = time.time()
 
@@ -169,7 +152,7 @@ def main():
     pool.close()
     pool.join()
 
-    end=time.time()
+    end = time.time()
 
     print("Computation time: {} s".format(end - start))
 

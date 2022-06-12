@@ -17,11 +17,11 @@ xarray
 # Installation
 Clone the pysqkit repository via git clone. Open the terminal and navigate to the parent folder where the pysqkit folder is stored and run
 
-pip install pysqkit
+pip install pysqkit/
 
 If you want your installation to be always up to date with the latest modifications run instead
 
-pip install -e pysqkit
+pip install -e pysqkit/
 
 # Documentation
 The documentation is currently being written, we apologize for any inconvenience this causes. If you have questions regarding the code, you can always reach us via the github page.

@@ -4,24 +4,15 @@ import time
 import qutip as qtp
 from scipy.optimize import minimize
 import pysqkit
-from pysqkit import QubitSystem, Qubit
 from pysqkit.drives.pulse_shapes import gaussian_top
 from pysqkit.util.metrics import average_process_fidelity, \
     average_gate_fidelity
 from pysqkit.util.phys import temperature_to_thermalenergy
 import pysqkit.util.transformations as trf
-from pysqkit.util.linalg import get_mat_elem
-from pysqkit.solvers.solvkit import integrate
 from pysqkit.util.hsbasis import pauli_by_index
-from pysqkit.solvers import solvkit
-from pysqkit.drives.pulse_shapes import gaussian_top
-import qutip
-from typing import List, Dict, Callable
+from typing import Callable
 import multiprocessing
 import util_tf_cr
-import matplotlib
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
-import copy
 import json
 import cmath
 
@@ -105,7 +96,7 @@ def get_fidelity_leakage(
     )
 
     #Fluxonium
-    levels_f = 8
+    levels_f = 8 # 8 for data in the paper
 
     flx = pysqkit.qubits.Fluxonium(
         label='F', 
@@ -150,7 +141,7 @@ def get_fidelity_leakage(
     t_rise = 10.0 # [ns]
     cr_coeff = np.abs(util_tf_cr.mu_yz_flx_sw(transm, flx, jc, eps))
 
-    t_gate_0 = [200.0]
+    t_gate_0 = [util_tf_cr.cr_gate_time(cr_coeff)]
 
     args_to_pass = (t_rise, cr_coeff) 
 
@@ -158,7 +149,6 @@ def get_fidelity_leakage(
                                    args=args_to_pass)
 
     t_gate = minimization_result['x'][0] 
-    print("t_gate: {} ns".format(t_gate))
     pts_per_drive_period = 10
 
     nb_points = int(t_gate*freq_drive*pts_per_drive_period)
@@ -216,8 +206,8 @@ def get_fidelity_leakage(
     return res
 
 def main():
-    n_points = 200
-    n_processes = 1 #set to maximum number of cores in the machine
+    n_points = 200 # 200 for the data in the paper
+    n_processes = 1 # set to maximum number of cores in your machine
     freq_list = np.linspace(4.2, 5.8, n_points)
 
     start = time.time()
@@ -230,7 +220,7 @@ def main():
     pool.close()
     pool.join()
 
-    end=time.time()
+    end = time.time()
 
     print("Computation time: {} s".format(end - start))
 

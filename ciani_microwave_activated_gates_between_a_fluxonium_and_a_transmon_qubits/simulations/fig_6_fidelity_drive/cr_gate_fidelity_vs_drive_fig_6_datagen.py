@@ -2,26 +2,14 @@ import numpy as np
 import scipy.integrate
 import time
 import qutip as qtp
-import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import pysqkit
-from pysqkit import QubitSystem, Qubit
 from pysqkit.drives.pulse_shapes import gaussian_top
 from pysqkit.util.metrics import average_process_fidelity, \
     average_gate_fidelity
 from pysqkit.util.phys import temperature_to_thermalenergy
-from pysqkit.util.quantum import generalized_rabi_frequency
 import pysqkit.util.transformations as trf
-from pysqkit.util.linalg import get_mat_elem
-from pysqkit.solvers.solvkit import integrate
 from pysqkit.util.hsbasis import pauli_by_index
-from pysqkit.solvers import solvkit
-from pysqkit.drives.pulse_shapes import gaussian_top
-import qutip
-from typing import List, Dict, Callable
-import matplotlib
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
-import copy
 import json
 import cmath
 import util_tf_cr
@@ -85,7 +73,7 @@ def get_fidelity(
         dephasing_times=None 
     )
 
-    levels_f = 6
+    levels_f = 6 # 6 for data in the paper
     
     flx = pysqkit.qubits.Fluxonium(
         label='F', 
@@ -167,7 +155,7 @@ def get_fidelity(
     
     my_hs_basis = pauli_by_index
 
-    n_process = 16
+    n_process = 1 # set to desired number of processes (we used 16 in the paper)
     
     cr_super_target = trf.kraus_to_super(cry(-np.pi/2), my_hs_basis)
     

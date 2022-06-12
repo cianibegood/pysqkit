@@ -1,7 +1,6 @@
 import numpy as np
 import time
 import qutip as qtp
-import matplotlib.pyplot as plt
 import scipy.integrate
 from scipy.optimize import minimize
 import pysqkit
@@ -12,10 +11,8 @@ from pysqkit.drives.pulse_shapes import gaussian_top
 from pysqkit.util.phys import temperature_to_thermalenergy
 from pysqkit.util.quantum import generalized_rabi_frequency
 import pysqkit.util.transformations as trf
-from pysqkit.util.hsbasis import weyl_by_index
-from typing import List, Dict, Callable
-import matplotlib
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
+from pysqkit.util.hsbasis import pauli_by_index
+from typing import List, Dict
 import util_cphase as util
 import cmath
 import json
@@ -155,17 +152,18 @@ def get_fidelity(
                                             options=simu_opt, 
                                             with_noise=with_noise)
     
-    n_process = 4
+    n_process = 4 # 4 in our simulations
 
-    sup_op = env_syst.to_super(comp_states_list, weyl_by_index, n_process)
+    sup_op = env_syst.to_super(comp_states_list, pauli_by_index, 
+                               n_process, speed_up=True)
 
-    sq_corr = util.single_qubit_corrections(sup_op, weyl_by_index)
-    sq_corr_sup = trf.kraus_to_super(sq_corr, weyl_by_index)
+    sq_corr = util.single_qubit_corrections(sup_op, pauli_by_index)
+    sq_corr_sup = trf.kraus_to_super(sq_corr, pauli_by_index)
     total_sup_op = sq_corr_sup.dot(sup_op)
 
     cphase = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], \
         [0, 0, 0, np.exp(1j*cond_phase)]])
-    cphase_super = trf.kraus_to_super(cphase, weyl_by_index)
+    cphase_super = trf.kraus_to_super(cphase, pauli_by_index)
 
     f_gate = average_gate_fidelity(cphase_super, total_sup_op, 
                                    avg_leakage)
@@ -183,8 +181,6 @@ def main():
 
     p_set = "CPHASE"
 
-
-    #Transmon
     levels_t = 3
     transm = pysqkit.qubits.SimpleTransmon(
         label='T', 
@@ -196,8 +192,7 @@ def main():
         dephasing_times=parameters_set[p_set]["dephasing_times_t"]
     )
 
-    #Fluxonium
-    levels_f = 5
+    levels_f = 5 # 5 for data in the paper
 
     flx = pysqkit.qubits.Fluxonium(
         label='F', 
@@ -210,7 +205,6 @@ def main():
     )
     flx.diagonalize_basis(levels_f)
 
-    # We also add a drive on the fluxonium
     flx.add_drive(
         pysqkit.drives.microwave_drive,
         label='cz_drive_f',
@@ -292,7 +286,7 @@ def main():
                        freq_drive=freq_drive, rise_time=t_rise, 
                        comp_states_list=comp_states_list)
 
-        n_process = 8
+        n_process = 8 # 8 in our simulations
 
         start = time.time()
         
@@ -305,8 +299,6 @@ def main():
         pool.join()
 
         end = time.time()
-
-        print(result)
 
         print("Computation time = {} s".format(end - start) )
         
