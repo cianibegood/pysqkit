@@ -1,3 +1,5 @@
+# Currently not used, but there is useful stuff
+
 from typing import Tuple, Optional, Dict, Iterable, Union, Callable, List
 import os
 import sys

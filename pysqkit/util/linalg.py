@@ -71,3 +71,10 @@ def transform_basis(operator, basis_tranformation):
         optimize=True,
     )
     return transformed_op
+
+def hilbert_schmidt_prod(
+    a: np.ndarray,
+    b: np.ndarray,
+)-> complex:
+    return np.trace(a.conj().T.dot(b))
+

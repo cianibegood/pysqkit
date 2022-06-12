@@ -1,2 +1,3 @@
-""" To write at the end """
+from .solvkit import integrate
 
+__all__ = ["integrate"]

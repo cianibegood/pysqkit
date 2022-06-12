@@ -132,3 +132,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .pdf
+*.pdf
+okteto.yml

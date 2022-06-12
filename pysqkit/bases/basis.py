@@ -1,4 +1,5 @@
 from abc import ABC
+from math import exp
 from typing import List
 
 import numpy as np
@@ -9,7 +10,9 @@ from ..util.linalg import tensor_prod, transform_basis
 
 class OperatorBasis(ABC):
     """
-    NOTE: This class is a bit empty currently. We can remove it - I added it as we might in theory look at sparse operator, in which case that would be integrated here I think.
+    NOTE: This class is a bit empty currently. We can remove it - 
+    I added it as we might in theory look at sparse operator, 
+    in which case that would be integrated here I think.
     """
 
     def __init__(self, dim_hilbert: int):
@@ -113,8 +116,18 @@ class OperatorBasis(ABC):
             return tensor_prod(_ops)
         return op
 
-    def finalize_op(self, op: np.ndarray) -> np.ndarray:
-        return self.expand_op(self.truncate_op(self.transform_op(op)))
+    def finalize_op(
+        self,
+        op: np.ndarray,
+        expand=True,
+        truncate=True,
+    ) -> np.ndarray:
+        final_op = self.transform_op(op)
+        if truncate:
+            final_op = self.truncate_op(final_op)
+        if expand:
+            final_op = self.expand_op(final_op)
+        return final_op
 
     def embed(self, subsys_ind: int, sys_dims: List[int]) -> None:
         if not isinstance(subsys_ind, int):
