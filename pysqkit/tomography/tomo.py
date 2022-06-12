@@ -211,11 +211,6 @@ class TomoEnv:
         Hilbert-Schmidt basis defined via the function hs_basis. 
         The function can be run in parallel by specifying the number of 
         processes n_process, which is 1 by default.
-
-        Warning
-        ----------------------------------------------------------------------
-        With speed_up = True does not seem to always work. It does not with d
-        d = 2.
         """
 
         unsupported_basis = hs_basis.__name__ not in self._hs_basis_speed_up
@@ -226,9 +221,6 @@ class TomoEnv:
 
         d = len(input_states)
         superoperator = np.zeros([d**2, d**2], dtype=complex)
-        # basis = [] 
-        # for i in range(0, d**2):
-        #     basis.append(iso_basis(i, input_states, hs_basis))
         
         basis = [iso_basis(i, input_states, hs_basis) for i in range(0, d**2)]
         index_list = np.arange(0, d**2)
