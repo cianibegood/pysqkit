@@ -599,3 +599,77 @@ with plt.rc_context(TEX_RC_PARAMS):
     plt.show()
 
 # %%
+SAVE_IMAGE = True
+
+freq_range = 0.015
+min_population = 1e-3
+
+collision_type = "spectator"
+n_photons = 1
+trans = "spec_01"
+da_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_scan.nc"
+    
+exc_populations = xr.load_dataarray(DATA_FOLDER / da_name)
+
+with plt.rc_context(TEX_RC_PARAMS):
+    fig, ax = plt.subplots(dpi=200)
+    
+    ax.axvline(
+        exc_populations.collision_cond, 
+        linestyle = "-", 
+        color="#f57c00"
+    )
+    ax.text(
+        exc_populations.collision_cond, 
+        1e-5, 
+        "Collision", 
+        horizontalalignment="left", 
+        verticalalignment="center", 
+        rotation=-90, 
+        color="#f57c00"
+    )
+
+    ax.axhline(min_population, linestyle = "--", color="#03a9f4")
+    ax.text(
+        5.1925, 
+        min_population + 5e-4, 
+        "Required exc. population", 
+        ha="left",  va="center", 
+        color="#03a9f4"
+    )
+
+    ax.axvline(exc_populations.collision_cond - freq_range, linestyle = "--", color="#ffc107")
+    ax.axvline(exc_populations.collision_cond + freq_range, linestyle = "--", color="#ffc107")
+    ax.text(
+        exc_populations.collision_cond + freq_range, 
+        3e-2, 
+        f"$\pm${int(freq_range*1e3)} MHz bound", 
+        ha="left", va="center", 
+        rotation=-90, 
+        color="#ffc107"
+    )
+    
+    ax.plot(exc_populations.spectator_freq, exc_populations, linestyle="-", marker="o", color="#455a64")
+
+    ax.set_yscale("log")
+    ax.set_ylabel("Exc. state population")
+    ax.set_xlabel("Spectator transmon frequency (GHz)")
+    ax.set_title("Transmon-fluxonium lattice")
+    ax.set_ylim(top=1)
+    plt.tight_layout()
+    
+    if SAVE_IMAGE:
+        image_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_bounds"
+        for file_format in ['pdf', 'png']:
+            full_name = f"{image_name}.{file_format}"
+            plt.savefig(
+                IMG_FOLDER / full_name,  
+                dpi=300,  
+                bbox_inches='tight', 
+                transparent=True, 
+                format=file_format
+            )
+    
+    plt.show()
+
+# %%
