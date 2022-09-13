@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.4.0
+#       jupytext_version: 1.4.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: repetition_codes_env
 #     language: python
-#     name: python3
+#     name: repetition_codes_env
 # ---
 
 # %% [markdown]
@@ -237,22 +237,16 @@ def run_simulation(
 def get_probabilities(
     state_labels : List[str], 
     system : systems.QubitSystem, 
-    output_states : List[qtp.Qobj],
+    output_state : qtp.Qobj,
 ) -> Dict:
-    probs_dict = {}
+    probs = []
     
     for label in state_labels:
-        probs = []
-        
         state = system.state(label, as_qobj=True)[1]        
         projector = state*state.dag()
         
-        for out_state in output_states:
-            prob = qtp.expect(projector, out_state)
-            probs.append(prob)
-        
-        probs_dict[label] = probs
-    return probs_dict
+        probs.append(qtp.expect(projector, output_state))
+    return probs
 
 
 # %%
@@ -892,4 +886,88 @@ if SAVE_DATA:
     da_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_scan.nc"
     leakage_rates.to_netcdf(DATA_FOLDER / da_name)
 
+# %% [markdown]
+# ### Scan around the $f_{spec}^{0 \rightarrow 1} = f_{target}^{0 \rightarrow 1}$ frequency collision (Type 7)
+
 # %%
+SAVE_DATA = True
+FREQ_RANGE = 0.1 #GHz
+NUM_POINTS = 41
+
+collision_cond = target_transmon.freq
+spectator_freqs = np.linspace(collision_cond - FREQ_RANGE, collision_cond + FREQ_RANGE, NUM_POINTS)
+
+results = []
+
+for spec_freq in spectator_freqs:
+    spec_transmon = qubits.SimpleTransmon(
+        label = 'spectator', 
+        max_freq = spec_freq, 
+        anharm = TRANSMON_ANHARM,
+        diel_loss_tan = DIEL_LOSS_TANGENT,
+        env_thermal_energy = THERMAL_ENERGY,    
+        dim_hilbert = TRANSMON_LEVELS
+    )
+
+    coupled_sys = spec_transmon.couple_to(
+        control_fluxonium, 
+        coupling = couplers.capacitive_coupling, 
+        strength=COUP_STRENGTH,
+    )
+
+    coupled_sys['control'].drives['cr_drive'].set_params(**drive_params)
+
+    init_labels = ["00", "01"]
+    init_states = get_states(coupled_sys, init_labels)
+    init_states_list = list(init_states.values())
+
+    proj_comp_mat = np.einsum('ai, aj -> ij', init_states_list, np.conj(init_states_list))
+    subsys_dims = list(q.dim_hilbert for q in coupled_sys)
+    proj_comp = qtp.Qobj(proj_comp_mat, dims=[subsys_dims, subsys_dims], isherm=True)
+
+    res = run_simulation(
+        times = 2*np.pi*times,
+        system = coupled_sys,
+        init_state = proj_comp/2, 
+        options = SOLVER_OPTIONS
+
+    )
+
+    final_state = res.states[-1]
+    out_labels = ["10", "11"]
+
+    out_state_probs = get_probabilities(
+        state_labels = out_labels, 
+        system = coupled_sys, 
+        output_state = final_state, 
+    )
+
+    results.append(np.sum(out_state_probs))
+    
+exc_populations = xr.DataArray(
+    results,
+    dims = ["spectator_freq"],
+    coords = dict(spectator_freq = spectator_freqs),
+    attrs = dict(
+        fluxonium_charge_energy = control_fluxonium.charge_energy,
+        fluxonium_induct_energy = control_fluxonium.induct_energy,
+        fluxonium_joseph_energy = control_fluxonium.joseph_energy,
+        target_freq = target_transmon.freq,
+        anharm = TRANSMON_ANHARM,
+        collision_cond = collision_cond,
+        rise_time = RISE_TIME,
+        eps_drive = EPS_DRIVE,
+        pulse_time = drive_params["pulse_time"],
+        drive_freq = drive_params["freq"],
+        points_per_drive_period = 10,
+        transmon_levels = TRANSMON_LEVELS,
+        fluxonium_levels = FLUXONIUM_LEVELS,
+    )
+)
+
+if SAVE_DATA:
+    collision_type = "spectator"
+    n_photons = 1
+    trans = "spec_01"
+    da_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_scan.nc"
+    exc_populations.to_netcdf(DATA_FOLDER / da_name)
