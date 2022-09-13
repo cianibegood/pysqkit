@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.4.2
+#       jupytext_version: 1.4.0
 #   kernelspec:
-#     display_name: repetition_codes_env
+#     display_name: Python 3
 #     language: python
-#     name: repetition_codes_env
+#     name: python3
 # ---
 
 # %% [markdown]
@@ -73,6 +73,14 @@ def get_states(system, state_labels):
         
         states[label] = np.exp(-1j*phase) * _state
     return states
+
+def get_projector(system, states):
+    states_vec= np.array(list(states.values()))
+    
+    proj_mat = np.einsum('ai, aj -> ij', states_vec, np.conj(states_vec))
+    subsys_dims = list(qubit.dim_hilbert for qubit in system)
+    proj = qtp.Qobj(proj_mat, dims=[subsys_dims, subsys_dims], isherm=True)
+    return proj
 
 
 # %%
@@ -327,9 +335,9 @@ fluxonium_freqs = extract_freqs(control_fluxonium)
 
 # %%
 # The drive label which determined what set of collision bounds to use
-DRIVE_STR = "low" # correspnding to drive amplitude of 100 MHz
+#DRIVE_STR = "low" # correspnding to drive amplitude of 100 MHz
 #DRIVE_STR = "mid" # correspnding to drive amplitude of 300 MHz
-#DRIVE_STR = "high" # correspnding to drive amplitude of 500 MHz
+DRIVE_STR = "high" # correspnding to drive amplitude of 500 MHz
 
 # %%
 if DRIVE_STR == "low":
@@ -909,36 +917,43 @@ for spec_freq in spectator_freqs:
         dim_hilbert = TRANSMON_LEVELS
     )
 
-    coupled_sys = spec_transmon.couple_to(
-        control_fluxonium, 
-        coupling = couplers.capacitive_coupling, 
+    control_spectator_coup = couplers.capacitive_coupling(
+        qubits=[control_fluxonium, spec_transmon],
         strength=COUP_STRENGTH,
     )
+    
+    full_sys = systems.QubitSystem(
+        qubits=[target_transmon, control_fluxonium, spec_transmon],
+        coupling=[target_control_coup, control_spectator_coup]
+    )
+    
+    full_sys['control'].drives['cr_drive'].set_params(**drive_params)
 
-    coupled_sys['control'].drives['cr_drive'].set_params(**drive_params)
-
-    init_labels = ["00", "01"]
-    init_states = get_states(coupled_sys, init_labels)
-    init_states_list = list(init_states.values())
-
-    proj_comp_mat = np.einsum('ai, aj -> ij', init_states_list, np.conj(init_states_list))
-    subsys_dims = list(q.dim_hilbert for q in coupled_sys)
-    proj_comp = qtp.Qobj(proj_comp_mat, dims=[subsys_dims, subsys_dims], isherm=True)
+    init_labels = ["000", "010", "100", "110"]
+    init_states = get_states(full_sys, init_labels)
+    init_state = get_projector(full_sys, init_states) / len(init_labels)
 
     res = run_simulation(
         times = 2*np.pi*times,
-        system = coupled_sys,
-        init_state = proj_comp/2, 
+        system = full_sys,
+        init_state = init_state, 
         options = SOLVER_OPTIONS
 
     )
 
     final_state = res.states[-1]
-    out_labels = ["10", "11"]
-
+    
+    target_states = []
+    for qubit in full_sys:
+        if qubit.label != "spectator":
+            qubit_labels = tuple(map(str, range(qubit.dim_hilbert)))
+        else:
+            qubit_labels = ("1", )
+        target_states.append(qubit_labels)
+        
     out_state_probs = get_probabilities(
-        state_labels = out_labels, 
-        system = coupled_sys, 
+        state_labels = state_labels(*target_states), 
+        system = full_sys, 
         output_state = final_state, 
     )
 
@@ -971,3 +986,5 @@ if SAVE_DATA:
     trans = "spec_01"
     da_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_scan.nc"
     exc_populations.to_netcdf(DATA_FOLDER / da_name)
+
+# %%
