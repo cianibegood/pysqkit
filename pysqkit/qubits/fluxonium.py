@@ -255,14 +255,15 @@ class Fluxonium(Qubit):
         self,
     ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            osc_hamil = self.res_freq * (self.basis.num_op + 0.5 * self.basis.id_op)
+            osc_hamil = self.res_freq*(self.basis.num_op + \
+                 0.5*self.basis.id_op)
 
-            flux_phase = np.exp(1j * 2 * np.pi * self.ext_flux)
+            flux_phase = np.exp(1j*2*np.pi*self.ext_flux)
 
-            exp_mat = flux_phase * la.expm(1j * self._get_flux_op())
+            exp_mat = flux_phase * la.expm(1j*self._get_flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
 
-            hamil = osc_hamil - self.joseph_energy * cos_mat
+            hamil = osc_hamil - self.joseph_energy*cos_mat
         else:
             raise NotImplementedError
 
@@ -421,7 +422,7 @@ class Fluxonium(Qubit):
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
-        gamma = diel_loss_tan_eff*self._ec*energy_diff**2*phi_km**2/4
+        gamma = diel_loss_tan_eff/self._ec*energy_diff**2*phi_km**2/4
         if self.env_thermal_energy > 0:
             nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
