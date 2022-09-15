@@ -421,7 +421,7 @@ class Fluxonium(Qubit):
         op = self.flux_op(expand=False)
         phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
 
-        gamma = diel_loss_tan_eff*self._ec*energy_diff**2*phi_km**2/4
+        gamma = diel_loss_tan_eff/self._ec*energy_diff**2*phi_km**2/4
         if self.env_thermal_energy > 0:
             nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
 
