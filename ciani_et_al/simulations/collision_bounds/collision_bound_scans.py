@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.4.0
+#       jupytext_version: 1.4.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: repetition_codes_env
 #     language: python
-#     name: python3
+#     name: repetition_codes_env
 # ---
 
 # %% [markdown]
@@ -76,7 +76,6 @@ def get_states(system, state_labels):
 
 def get_projector(system, states):
     states_vec= np.array(list(states.values()))
-    
     proj_mat = np.einsum('ai, aj -> ij', states_vec, np.conj(states_vec))
     subsys_dims = list(qubit.dim_hilbert for qubit in system)
     proj = qtp.Qobj(proj_mat, dims=[subsys_dims, subsys_dims], isherm=True)
@@ -986,5 +985,3 @@ if SAVE_DATA:
     trans = "spec_01"
     da_name = f"{LATTICE_TYPE}_lat_{collision_type}_col_{trans}_{n_photons}-photon_transition_{DRIVE_STR}_drive_scan.nc"
     exc_populations.to_netcdf(DATA_FOLDER / da_name)
-
-# %%
