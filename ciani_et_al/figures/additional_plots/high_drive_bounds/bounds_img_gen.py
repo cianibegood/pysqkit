@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.4.2
+#       jupytext_version: 1.4.0
 #   kernelspec:
-#     display_name: repetition_codes_env
+#     display_name: Python 3
 #     language: python
-#     name: repetition_codes_env
+#     name: python3
 # ---
 
 # %% [markdown]
