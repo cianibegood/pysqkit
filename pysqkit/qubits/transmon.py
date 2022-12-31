@@ -288,7 +288,7 @@ class SimpleTransmon(Qubit):
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Fock basis
         dim_hilbert: Optional[int] = 100
-            Hilber space dimension       
+            Hilbert space dimension       
         """
 
         if max_freq < 0:

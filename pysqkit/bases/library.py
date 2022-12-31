@@ -35,3 +35,27 @@ def fock_basis(dim_hilbert: int):
         raise ValueError("Hilbert dimensionality must be a positive integer")
 
     return FockBasis(dim_hilbert)
+
+class ChargeRotorBasis(OperatorBasis):
+    """
+    Class that allows to write operators in the discrete charge (or angular
+    momentum) basis of a rotor.
+    """
+
+    @property
+    def charge_op(self):
+        charge_list = [-int(np.floor(self.dim_hilbert/2)) + x \
+            for x in range(self.dim_hilbert)]
+        return np.diag(charge_list) 
+    
+    @property
+    def cosine_op(self):
+        op = 1/2*np.diag(np.ones(self.dim_hilbert - 1), 1)
+        return op + op.transpose()
+    
+    @property
+    def id_op(self):
+        return np.identity(self.dim_hilbert)
+
+
+

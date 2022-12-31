@@ -15,9 +15,15 @@ from ..util.linalg import order_vecs, get_mat_elem, tensor_prod
 
 
 class Qubit(ABC):
-    def __init__(self, label: str, basis: OperatorBasis):
-        if not isinstance(basis, OperatorBasis):
-            raise ValueError("basis must be an instance of bases.OperatorBasis class")
+    def __init__(
+        self, 
+        label: str, 
+        basis: Union[OperatorBasis, Dict[str, OperatorBasis]]
+        ):
+        if not isinstance(basis, OperatorBasis) and \
+            not isinstance(basis, Dict[str, OperatorBasis]):
+            raise ValueError("basis must be an instance of bases.OperatorBasis class"
+                             " or an instance of Dict[str, bases.OperatorBasis]")
 
         self._basis = basis
 
