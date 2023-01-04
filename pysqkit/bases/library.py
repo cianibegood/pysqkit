@@ -56,6 +56,16 @@ class ChargeRotorBasis(OperatorBasis):
     @property
     def id_op(self):
         return np.identity(self.dim_hilbert)
+    
+    def __repr__(self) -> str:
+        label_str = "Charge Rotor basis, hilbert dim={}".format(self.dim_hilbert)
+        return label_str
+
+def charge_rotor_basis(dim_hilbert: int):
+    if not isinstance(dim_hilbert, int) or dim_hilbert <= 0:
+        raise ValueError("Hilbert dimensionality must be a positive integer")
+
+    return ChargeRotorBasis(dim_hilbert)
 
 
 

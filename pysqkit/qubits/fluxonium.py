@@ -27,7 +27,7 @@ class Fluxonium(Qubit):
     V. Manucharyan et al., 	Science 326, 113-116 (2009). The fluxonium has
     basic Hamiltonian
 
-    H = E_C q^2/2 + E_L \phi^2/2 - E_J \cos(\phi + 2 \pi \Phi_ext/\Phi_0)
+    H = 4 E_C q^2 + E_L \phi^2/2 - E_J \cos(\phi + 2 \pi \Phi_ext/\Phi_0)
 
     with E_C the charging energy, E_L the inductive energy, E_J the 
     Josephson energy, \Phi_ext the external flux, \Phi_0 = h/(2 e) the
@@ -97,7 +97,7 @@ class Fluxonium(Qubit):
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Fock basis
         dim_hilbert: Optional[int] = 100
-            Hilber space dimension       
+            Hilbert space dimension       
         """
 
         self._ec = charge_energy
@@ -260,7 +260,7 @@ class Fluxonium(Qubit):
         return q_attrs
 
     def _get_hamiltonian(
-        self,
+        self
     ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
             osc_hamil = self.res_freq*(self.basis.num_op + \

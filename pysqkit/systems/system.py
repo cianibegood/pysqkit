@@ -21,7 +21,7 @@ class Qubit(ABC):
         basis: Union[OperatorBasis, Dict[str, OperatorBasis]]
         ):
         if not isinstance(basis, OperatorBasis) and \
-            not isinstance(basis, Dict[str, OperatorBasis]):
+            not isinstance(basis, Dict):
             raise ValueError("basis must be an instance of bases.OperatorBasis class"
                              " or an instance of Dict[str, bases.OperatorBasis]")
 

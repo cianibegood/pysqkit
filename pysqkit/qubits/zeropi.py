@@ -10,15 +10,14 @@ import xarray as xr
 from qutip import Qobj
 
 from ..systems import Qubit
-from ..bases import fock_basis, FockBasis, OperatorBasis
+from ..bases import fock_basis, charge_rotor_basis, FockBasis, ChargeRotorBasis, OperatorBasis
 from ..util.linalg import get_mat_elem
-from ..util.phys import average_photon, temperature_to_thermalenergy
 
 
-_supported_bases = (FockBasis,)
+_supported_bases = (FockBasis, ChargeRotorBasis)
 
 
-class Zeropi(Qubit):
+class Zeropi:
     
     """
     Description
@@ -81,7 +80,7 @@ class Zeropi(Qubit):
         joseph_energy: float,
         *,
         basis: Optional[Dict[str, OperatorBasis]] = None,
-        dim_hilbert: Optional[Dict[str, int]] = 100,
+        dim_hilbert: Optional[Dict[str, int]] = {'phi': 50, 'theta': 51},
     ) -> None:
         
         """
@@ -126,8 +125,6 @@ class Zeropi(Qubit):
         else:
             if not isinstance(basis, _supported_bases):
                 raise NotImplementedError("Basis not supported yet")
-
-        super().__init__(label=label, basis=basis)
         
 
     def __copy__(self) -> "Zeropi":
@@ -193,6 +190,73 @@ class Zeropi(Qubit):
     @joseph_energy.setter
     def joseph_energy(self, joseph_energy: float) -> None:
         self._ej = joseph_energy
+    
+    @property
+    def mass_sigma(self) -> float:
+        return 1/(8*self._ec_sigma)
+    
+    @property
+    def mass_chi(self) -> float:
+        return 1/(8*self._ec_chi)
+    
+    @property
+    def mass_phi(self) -> float:
+        return 1/(8*self._ec_phi)
+    
+    @property
+    def mass_theta(self) -> float:
+        return 1/(8*self._ec_theta)
+    
+    @property
+    def res_freq_chi(self) -> float:
+        return (8*self._ec_chi/(2*self._el))**0.25
+    
+    @property
+    def res_freq_phi(self) -> float:
+        return (8*self._ec_phi/(2*self._el))**0.25
+    
+    @property
+    def flux_zpf_chi(self) -> float:
+        return (2*self._ec_chi/(2*self._el))**0.25
+    
+    @property
+    def flux_zpf_phi(self) -> float:
+        return (2*self._ec_phi/(2*self._el))**0.25
+    
+    @property
+    def _qubit_attrs(self) -> dict:
+        q_attrs = dict(
+            charge_energy_sigma=self.charge_energy_sigma,
+            charge_energy_chi=self.charge_energy_chi,
+            charge_energy_phi=self.charge_energy_phi,
+            charge_energy_theta=self.charge_energy_theta,
+            joseph_energy=self.joseph_energy,
+            induct_energy=self.induct_energy
+        )
+        return q_attrs
+    
+    def collapse_ops(self):
+        return None 
+    
+    def dephasing_op(self):
+        return None
+
+    def _get_Hamiltonian(self) -> np.ndarray:
+        pass 
+    
+    def hamiltonian(self, *, expand_op=True) -> np.ndarray:
+        return None
+    
+    def potential(self) -> np.ndarray:
+        return None
+    
+    def wave_function(self) -> np.ndarray:
+        return None
+    
+
+
+    
+
 
     
         
