@@ -2,19 +2,18 @@ from typing import Optional, Union, List, Tuple
 from copy import copy
 from warnings import warn
 from itertools import combinations
-
 import numpy as np
 from scipy import linalg as la
 from qutip import Qobj
-
 from ..systems import Qubit
-from ..bases import fock_basis, FockBasis, OperatorBasis
+from ..bases import fock_basis, charge_rotor_basis, FockBasis, ChargeRotorBasis, OperatorBasis
 from ..util.linalg import get_mat_elem
 from ..util.phys import average_photon, temperature_to_thermalenergy
 
-_supported_bases = (FockBasis,)
+_supported_bases = (FockBasis, ChargeRotorBasis)
 
-class Transmon(Qubit):
+class CooperPairBox(Qubit):
+
     def __init__(
         self,
         label: str,
@@ -24,15 +23,40 @@ class Transmon(Qubit):
         charge_offset: Optional[float] = 0,
         *,
         basis: Optional[OperatorBasis] = None,
-        dim_hilbert: Optional[int] = 100,
+        dim_hilbert: Optional[int] = 100
     ) -> None:
+
+        """
+        Parameters
+        ----------------------------------------------------------------------
+        label: str
+            A string that identifies the CPB
+        charge_energy: float
+            Charging energy of the CPB
+        joseph_energy: float
+            Josephson energy of the CPB
+        ext_flux: float
+            Reduced external flux in a tunable CPB with a SQUID loop. It
+            gives an effective Josephson energy
+            joseph_energy*cos(ext_flux/2)
+        charge_offset: float
+            Reduced gate charge. It modifies the charging term in the 
+            Hamiltonian via the substitution n -> n + charge_offset*identity
+        basis: Optional[OperatorBasis] = None
+            Basis in which we want to write the operators. If not provided
+            it is assumed it is the ChargeRotorBasis
+        dim_hilbert: Optional[int] = 51
+            Hilbert space dimension       
+        """
+
         self._ec = charge_energy
         self._ej = joseph_energy
         self._ext_flux = ext_flux
+        self._ej_eff = joseph_energy*np.cos(ext_flux/2)
         self._n_offset = charge_offset
 
         if basis is None:
-            basis = fock_basis(dim_hilbert)
+            basis = charge_rotor_basis(dim_hilbert)
 
         else:
             if not isinstance(basis, _supported_bases):
@@ -40,7 +64,7 @@ class Transmon(Qubit):
 
         super().__init__(label=label, basis=basis)
 
-    def __copy__(self) -> "Transmon":
+    def __copy__(self) -> "CooperPairBox":
         qubit_copy = self.__class__(
             self.label,
             self.charge_energy,
@@ -85,28 +109,31 @@ class Transmon(Qubit):
     @charge_offset.setter
     def charge_offset(self, offset_val: float) -> None:
         self._n_offset = offset_val
+    
+    @property
+    def effective_joseph_energy(self) -> float:
+        return self._ej_eff
 
     @property
     def res_freq(self) -> float:
-        return np.sqrt(8 * self._ec * self._ej)
+        return np.sqrt(8*self._ec*self._ej_eff)
 
     @property
     def flux_zpf(self) -> float:
-        return (2 * self._ec / self._ej) ** 0.25
+        return (2*self._ec/self._ej_eff)**0.25
 
     @property
     def charge_zpf(self) -> float:
-        return (self._ej / (32 * self._ec)) ** 0.25
+        return (self._ej_eff/(32*self._ec))**0.25
 
     def _get_charge_op(self):
-        charge_op = 1j * self.charge_zpf * (self.basis.raise_op - self.basis.low_op)
-        return charge_op - self._n_offset
+        return self.basis.charge_op
 
     def charge_op(
         self,
         *,
-        expand: Optional[bool] = True,
-        as_qobj: Optional[bool] = False,
+        expand=True,
+        as_qobj=False,
     ) -> np.ndarray:
         op = self._get_charge_op()
         charge_op = self.basis.finalize_op(op, expand=expand)
@@ -123,39 +150,44 @@ class Transmon(Qubit):
             )
             return qobj_op
         return charge_op
-
-    def _get_flux_op(self):
-        flux_op = self.flux_zpf * (self.basis.raise_op + self.basis.low_op)
-        return flux_op
-
-    def flux_op(
+    
+    def _get_cosine_op(
+        self 
+    ):
+        return self.basis.cosine_op
+    
+    def cosine_op(
         self,
         *,
-        expand: Optional[bool] = True,
-        as_qobj: Optional[bool] = False,
+        expand=True,
+        as_qobj=False,
     ) -> np.ndarray:
-        op = self._get_flux_op()
-        flux_op = self.basis.finalize_op(op, expand=expand)
+        op = self._get_cosine_op()
+        cosine_op = self.basis.finalize_op(op, expand=expand)
 
         if as_qobj:
             dim = self.basis.sys_truncated_dims
 
             qobj_op = Qobj(
-                inpt=flux_op,
+                inpt=cosine_op,
                 dims=[dim, dim],
-                shape=flux_op.shape,
+                shape=cosine_op.shape,
                 type="oper",
                 isherm=True,
             )
             return qobj_op
-        return flux_op
+        return cosine_op
+        
+        
 
     @property
     def _qubit_attrs(self) -> dict:
         q_attrs = dict(
             charge_energy=self.charge_energy,
             joseph_energy=self.joseph_energy,
-            flux=self.flux,
+            ext_flux=self.ext_flux,
+            offset_charge=self.charge_offset,
+            effective_joseph_energy=self.effective_joseph_energy
         )
         return q_attrs
 
@@ -163,10 +195,11 @@ class Transmon(Qubit):
         self,
     ) -> np.ndarray:
         charge_op = self._get_charge_op()
-        charge_term = 4 * self._ec * (charge_op @ charge_op)
+        cosine_op = self._get_cosine_op()
+        charge_term = 4*self._ec*(charge_op@charge_op + \
+            2*self.charge_offset*charge_op)
 
-        flux_op = self._get_flux_op()
-        joseph_term = self.joseph_energy * la.cosm(flux_op)
+        joseph_term = self.effective_joseph_energy*cosine_op
 
         hamil = charge_term - joseph_term
         return hamil
@@ -190,7 +223,7 @@ class Transmon(Qubit):
         return hamil
 
     def potential(self, flux: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        pot = -self._ej * np.cos(flux)
+        pot = -self._ej_eff*np.cos(flux)
         return pot
 
     def wave_function(self) -> np.ndarray:
@@ -198,6 +231,12 @@ class Transmon(Qubit):
 
     def dielectric_loss(self) -> List[np.ndarray]:
         raise NotImplementedError
+    
+    def collapse_ops(self):
+        pass
+    
+    def dephasing_op(self):
+        pass
 
     @staticmethod
     def from_freq(
@@ -209,11 +248,11 @@ class Transmon(Qubit):
         *,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
-    ) -> "Transmon":
+    ) -> "CPB":
         charge_energy = -anharm
         res_freq = max_freq - anharm
-        joseph_energy = (res_freq / np.sqrt(8 * charge_energy)) ** 2
-        return Transmon(
+        joseph_energy = (res_freq/np.sqrt(8*charge_energy))**2
+        return CooperPairBox(
             label,
             charge_energy,
             joseph_energy,
@@ -288,7 +327,7 @@ class SimpleTransmon(Qubit):
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Fock basis
         dim_hilbert: Optional[int] = 100
-            Hilber space dimension       
+            Hilbert space dimension       
         """
 
         if max_freq < 0:

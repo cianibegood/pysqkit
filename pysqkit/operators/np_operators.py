@@ -1,5 +1,9 @@
 import numpy as np
 
+"""
+Harmonic Oscillator (or 1D particle) operators in the Fock basis
+"""
+
 
 def low_op(dim: int) -> np.ndarray:
     low_op = np.diag(np.sqrt(np.arange(1, dim)), 1)
@@ -17,6 +21,9 @@ def num_op(dim: int) -> np.ndarray:
 def id_op(dim: int) -> np.ndarray:
     return np.eye(dim)
 
+"""
+Paulis
+"""
 
 sigma = {
     'I': np.array([[1., 0.], [0., 1.]], dtype=complex),

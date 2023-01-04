@@ -97,7 +97,7 @@ class Fluxonium(Qubit):
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Fock basis
         dim_hilbert: Optional[int] = 100
-            Hilber space dimension       
+            Hilbert space dimension       
         """
 
         self._ec = charge_energy
@@ -260,7 +260,7 @@ class Fluxonium(Qubit):
         return q_attrs
 
     def _get_hamiltonian(
-        self,
+        self
     ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
             osc_hamil = self.res_freq*(self.basis.num_op + \
