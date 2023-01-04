@@ -252,7 +252,7 @@ class CooperPairBox(Qubit):
         charge_energy = -anharm
         res_freq = max_freq - anharm
         joseph_energy = (res_freq/np.sqrt(8*charge_energy))**2
-        return CPB(
+        return CooperPairBox(
             label,
             charge_energy,
             joseph_energy,
