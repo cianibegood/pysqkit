@@ -105,6 +105,33 @@ class FreeRotor(Qubit):
             )
             return qobj_op
         return charge_op
+    
+    def _get_cosine_op(self):
+        return self.basis.cosine_op
+    
+    def cosine_op(
+        self,
+        *,
+        expand=True,
+        as_qobj=False,
+    ) -> np.ndarray:
+        op = self._get_cosine_op()
+        cosine_op = self.basis.finalize_op(op, expand=expand)
+
+        if as_qobj:
+            dim = self.basis.sys_truncated_dims
+
+            qobj_op = Qobj(
+                inpt=cosine_op,
+                dims=[dim, dim],
+                shape=cosine_op.shape,
+                type="oper",
+                isherm=True,
+            )
+            return qobj_op
+        return cosine_op
+    
+
 
     @property
     def _qubit_attrs(self) -> dict:
