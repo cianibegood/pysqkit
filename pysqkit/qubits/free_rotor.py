@@ -29,6 +29,7 @@ class FreeRotor(Qubit):
         label: str,
         charge_energy: float,
         *,
+        reduced_gate_charge: float = 0.0,
         basis: Optional[OperatorBasis] = None,
         dim_hilbert: Optional[int] = 100,
     ) -> None:
@@ -40,6 +41,9 @@ class FreeRotor(Qubit):
             A string that identifies the free rotor
         charge_energy: float
             Charging energy of the free rotor
+        reduced_gate_charge: float
+            Reduced gate charge on the capacitor. In general, it can 
+            be taken between 0 and 1
         basis: Optional[OperatorBasis] = None
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Charge Rotor basis
@@ -48,6 +52,7 @@ class FreeRotor(Qubit):
         """
 
         self._ec = charge_energy
+        self._ng = reduced_gate_charge
 
         if basis is None:
             basis = charge_rotor_basis(dim_hilbert)
@@ -62,6 +67,7 @@ class FreeRotor(Qubit):
         qubit_copy = self.__class__(
             self.label,
             self.charge_energy,
+            reduced_gate_charge=self.reduced_gate_charge,
             basis=copy(self.basis),
         )
         qubit_copy._drives = {
@@ -76,6 +82,14 @@ class FreeRotor(Qubit):
     @charge_energy.setter
     def charge_energy(self, charge_energy: float) -> None:
         self._ec = charge_energy
+    
+    @property
+    def reduced_gate_charge(self) -> float:
+        return self._ng
+
+    @reduced_gate_charge.setter
+    def reduced_gate_charge(self, reduced_gate_charge: float) -> None:
+        self._ng = reduced_gate_charge
 
     @property
     def rotor_mass(self) -> float:
@@ -144,7 +158,8 @@ class FreeRotor(Qubit):
         self
     ) -> np.ndarray:
         if isinstance(self.basis, ChargeRotorBasis):
-            n_op = self.basis.charge_op
+            n_op = self.basis.charge_op + \
+                self.reduced_gate_charge*np.identity(self.dim_hilbert)
             free_rotor_hamil = \
                 4*self.charge_energy*n_op.dot(n_op)
         else:
