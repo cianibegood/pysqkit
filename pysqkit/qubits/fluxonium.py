@@ -45,6 +45,7 @@ class Fluxonium(Qubit):
         ext_flux: Optional[float] = 0.5,
         diel_loss_tan: Optional[float] = 0.0,
         freq_loss_tan: Optional[float] = 6.0,
+        ind_loss_tan: Optional[float] = 0.0,
         env_thermal_energy: Optional[float] = 0.0, #kb T
         dephasing_times: Optional[dict] = None,
         *,
@@ -74,6 +75,11 @@ class Fluxonium(Qubit):
             L. B. Nguyen et al., Phys. Rev. X 9, 041041 (2019).
         freq_loss_tan: Optional[float] = 6.0
             Frequency at which the dielectric loss tangent is given.
+        ind_loss_tan: Optional[float] = 0.0
+            Inductive loss tangent, i.e., the inverse of the quality factor
+            that governs relaxation via inductive losses. See 
+            Hazard et al., Phys. Rev. Lett. 122, 010504 (2019) or 
+            Nguyen et al., Phys. Rev. X, 9, 041041 (2019).
         env_thermal_energy: Optional[float] = 0.0
             Thermal energy of the environment k_b T.
         dephasing_times: Optional[dict] = None
@@ -91,7 +97,7 @@ class Fluxonium(Qubit):
             Basis in which we want to write the operators. If not provided
             it is assumed it is the Fock basis
         dim_hilbert: Optional[int] = 100
-            Hilber space dimension       
+            Hilbert space dimension       
         """
 
         self._ec = charge_energy
@@ -101,6 +107,7 @@ class Fluxonium(Qubit):
 
         self.diel_loss_tan = diel_loss_tan
         self.freq_loss_tan = freq_loss_tan
+        self.ind_loss_tan = ind_loss_tan
         self.env_thermal_energy = env_thermal_energy
         self.dephasing_times = dephasing_times
 
@@ -113,7 +120,7 @@ class Fluxonium(Qubit):
 
         super().__init__(label=label, basis=basis)
         
-        self._loss_rates = dict(dielectric=self.dielectric_rates)
+        self._loss_rates = dict(dielectric=self.dielectric_rates, inductive=self.inductive_rates)
         self._dephasing_rates = dict(pure_dephasing=self.pure_dephasing_rate)
 
     def __copy__(self) -> "Fluxonium":
@@ -125,6 +132,7 @@ class Fluxonium(Qubit):
             self.ext_flux,
             self.diel_loss_tan,
             self.freq_loss_tan,
+            self.ind_loss_tan,
             self.env_thermal_energy,
             self.dephasing_times,
             basis=copy(self.basis),
@@ -252,17 +260,18 @@ class Fluxonium(Qubit):
         return q_attrs
 
     def _get_hamiltonian(
-        self,
+        self
     ) -> np.ndarray:
         if isinstance(self.basis, FockBasis):
-            osc_hamil = self.res_freq * (self.basis.num_op + 0.5 * self.basis.id_op)
+            osc_hamil = self.res_freq*(self.basis.num_op + \
+                 0.5*self.basis.id_op)
 
-            flux_phase = np.exp(1j * 2 * np.pi * self.ext_flux)
+            flux_phase = np.exp(1j*2*np.pi*self.ext_flux)
 
-            exp_mat = flux_phase * la.expm(1j * self._get_flux_op())
+            exp_mat = flux_phase * la.expm(1j*self._get_flux_op())
             cos_mat = 0.5 * (exp_mat + exp_mat.conj().T)
 
-            hamil = osc_hamil - self.joseph_energy * cos_mat
+            hamil = osc_hamil - self.joseph_energy*cos_mat
         else:
             raise NotImplementedError
 
@@ -363,7 +372,7 @@ class Fluxonium(Qubit):
     def dielectric_rates(
         self,
         level_k: int, # Suggestion: shall we pass this to string?
-        level_m: int,
+        level_m: int
     ) -> Tuple[float, float]:
         
         """
@@ -423,14 +432,83 @@ class Fluxonium(Qubit):
 
         gamma = diel_loss_tan_eff*self._ec*energy_diff**2*phi_km**2/4
         if self.env_thermal_energy > 0:
-            nth = average_photon(energy_diff * self._ec, self.env_thermal_energy)
+            nth = average_photon(energy_diff*self._ec, self.env_thermal_energy)
 
             relaxation_rate = gamma * (nth + 1)
             excitation_rate = gamma * nth
 
             return relaxation_rate, excitation_rate
         else:
-            return gamma, 0.0    
+            return gamma, 0.0
+    
+    def inductive_rates(
+        self,
+        level_k: int,
+        level_m: int
+    ) -> Tuple[float, float]:
+
+        """
+        Description
+        ----------------------------------------------------------------------
+        Returns the relaxation and excitation rate due 
+        to inductive loss between two eigenstates.
+        """
+
+        if not isinstance(self.ind_loss_tan, float):
+            raise ValueError(
+                "Inductive loss tangent expected as a"
+                "float value, instead got {}".format(type(self.diel_loss_tan))
+            )
+        if not isinstance(self.env_thermal_energy, float):
+            raise ValueError(
+                "Environment thermal energy expected as a"
+                "float value, instead got {}".format(\
+                    type(self.env_thermal_energy))
+            )
+
+
+        if self.ind_loss_tan < 0 or self.env_thermal_energy < 0:
+            raise ValueError(
+                "Loss tangent and (absolute) "
+                "thermal energy kb*T must be positive."
+            )
+
+        if level_k == level_m:
+            raise ValueError(
+                "Eigenstate indices level_k and level_m must be different."
+            )
+
+        if level_k < 0 or level_m < 0:
+            raise ValueError("Eigenstate indices level_k and level_m must be positive.")
+        elif level_k >= self.dim_hilbert or level_m >= self.dim_hilbert:
+            raise ValueError(
+                "Eigenstate labels k and m must be smaller than"
+                " the Hilbert space dimension."
+            )
+        
+        if self.ind_loss_tan == 0:
+            return 0.0, 0.0
+
+        if level_k > level_m:
+            level_k, level_m = level_m, level_k
+
+        eig_en, eig_vec = self.eig_states([level_k, level_m], expand=False)
+        energy_diff = (eig_en[1] - eig_en[0])/self._ec
+
+
+        op = self.flux_op(expand=False)
+        phi_km = np.abs(get_mat_elem(op, eig_vec[1], eig_vec[0]))
+
+        gamma = 2*self.ind_loss_tan*self._el*phi_km**2/4
+        if self.env_thermal_energy > 0:
+            nth = average_photon(energy_diff*self._ec, self.env_thermal_energy)
+
+            relaxation_rate = gamma * (nth + 1)
+            excitation_rate = gamma * nth
+
+            return relaxation_rate, excitation_rate
+        else:
+            return gamma, 0.0
 
     def loss_rates(
         self,

@@ -5,4 +5,5 @@ if _use_qutip:
 else:
     from .np_operators import low_op, raise_op, id_op, num_op, sigma
 
-__all__ = ['low_op', 'raise_op', 'id_op', 'num_op', 'sigma', '_use_qutip']
+__all__ = ['low_op', 'raise_op', 'id_op', 'num_op', 'sigma', 
+           '_use_qutip']
